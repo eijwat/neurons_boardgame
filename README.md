@@ -1,4 +1,4 @@
-# The NEURONS
+# The NEURONS Boardgame
 
 *[English](#english) | [日本語](#日本語)*
 
