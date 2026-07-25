@@ -1,4 +1,4 @@
-# The NEURONS Boardgame
+# The NEURONS Board　Game
 
 *[English](#english) | [日本語](#日本語)*
 
@@ -39,7 +39,7 @@ Tap a card in your hand to select it, tap it again (or the Rotate button, or the
 
 ### Hosting on GitHub Pages
 
-Put `index.html` at the repository root, enable Pages in the repository settings (deploy from branch), and the game is live.
+[Neurons Board Game](https://eijwat.github.io/neurons_boardgame/)
 
 ---
 
@@ -74,7 +74,7 @@ Put `index.html` at the repository root, enable Pages in the repository settings
 
 ### GitHub Pagesでの公開
 
-`index.html` をリポジトリのルートに置き、リポジトリ設定でPagesを有効化(ブランチからのデプロイ)すれば公開完了です。
+[Neurons Board Game](https://eijwat.github.io/neurons_boardgame/)
 
 ---
 
