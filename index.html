@@ -151,6 +151,12 @@ button.flat:active { transform: translateY(1px); }
 }
 #result-card h2 { font-size: 26px; margin-bottom: 6px; }
 #result-card p { font-size: 15px; margin-bottom: 16px; }
+#mode-card {
+  background: var(--ui-green); border-radius: 12px; padding: 26px 34px; text-align: center;
+  box-shadow: 0 8px 30px rgba(0,0,0,.3); transform: rotate(1deg);
+}
+#mode-card h2 { font-size: 20px; margin-bottom: 16px; }
+#mode-card .flat { font-size: 14px; margin: 0 6px; padding: 10px 18px; }
 
 @media (max-width: 420px) {
   .title-card .word { font-size: 18px; }
@@ -169,7 +175,7 @@ button.flat:active { transform: translateY(1px); }
   </div>
   <div class="scores">
     <div class="score-chip" id="chip-white"><span class="stone white"></span><span><small id="lbl-you">あなた</small></span><b id="score-white">0</b></div>
-    <div class="score-chip" id="chip-black"><span class="stone black"></span><span><small>CPU</small></span><b id="score-black">0</b></div>
+    <div class="score-chip" id="chip-black"><span class="stone black"></span><span><small id="lbl-black">CPU</small></span><b id="score-black">0</b></div>
   </div>
   <div class="header-btns">
     <button class="flat" id="btn-lang">EN</button>
@@ -243,6 +249,16 @@ button.flat:active { transform: translateY(1px); }
       <p>Diagonal ×8, V-line ×8, Cross ×4, Circle only ×4</p>
     </div>
     <div class="close-row"><button class="flat" id="btn-rules-close">閉じる</button></div>
+  </div>
+</div>
+
+<div class="modal-bg hidden" id="mode-modal">
+  <div id="mode-card">
+    <h2 id="mode-title"></h2>
+    <div>
+      <button class="flat" id="btn-mode-cpu"></button>
+      <button class="flat" id="btn-mode-2p"></button>
+    </div>
   </div>
 </div>
 
@@ -541,7 +557,12 @@ const I18N = {
     floatTie: '同数 不成立',
     resultWin: 'あなたの勝ち!', resultLose: 'CPUの勝ち', resultDraw: '引き分け',
     resultDetail: (w, b) => '白 ' + w + ' 対 黒 ' + b,
-    gameEnd: (w, b) => 'ゲーム終了 白' + w + ' 対 黒' + b
+    gameEnd: (w, b) => 'ゲーム終了 白' + w + ' 対 黒' + b,
+    chooseMode: 'モードを選んでください',
+    modeCpu: 'CPU戦', mode2p: '2人対戦',
+    turnOfWhite: '白の番です', turnOfBlack: '黒の番です',
+    winnerWhite: '白の勝ち!', winnerBlack: '黒の勝ち!',
+    deckInfo2p: (w, b) => '山札 白:' + w + ' / 黒:' + b
   },
   en: {
     you: 'You', rules: 'Rules', newgame: 'New', rotate: 'Rotate ⟳', close: 'Close',
@@ -558,7 +579,12 @@ const I18N = {
     floatTie: 'Tie: fizzled',
     resultWin: 'You win!', resultLose: 'CPU wins', resultDraw: 'Draw',
     resultDetail: (w, b) => 'White ' + w + ' vs Black ' + b,
-    gameEnd: (w, b) => 'Game over: White ' + w + ' vs Black ' + b
+    gameEnd: (w, b) => 'Game over: White ' + w + ' vs Black ' + b,
+    chooseMode: 'Choose a mode',
+    modeCpu: 'vs CPU', mode2p: '2 players',
+    turnOfWhite: "White's turn", turnOfBlack: "Black's turn",
+    winnerWhite: 'White wins!', winnerBlack: 'Black wins!',
+    deckInfo2p: (w, b) => 'Deck W:' + w + ' / B:' + b
   }
 };
 let lang = (navigator.language || 'ja').toLowerCase().indexOf('ja') === 0 ? 'ja' : 'en';
@@ -569,9 +595,12 @@ const BOUNDS = { w: 11, h: 11, cx: 5, cy: 5 };
 const CELL = 56;
 const SVGNS = 'http://www.w3.org/2000/svg';
 
+let mode = 'cpu';
 let board, decks, hands, scores, turn, selIdx, selOrient, gameOver, busy;
 let lastStatus = { key: 'statusStart', args: [], thinking: false };
 let lastResult = null;
+
+function humanColor() { return mode === '2p' ? turn : 'white'; }
 
 function newGame() {
   board = new Board();
@@ -638,7 +667,7 @@ function renderBoard() {
   for (const c of board.cells.values()) {
     drawCircleMark(svg, px(c.x + 0.5), px(c.y + 0.5), c.color);
   }
-  if (!gameOver && turn === 'white' && !busy) {
+  if (!gameOver && !busy && (mode === '2p' || turn === 'white')) {
     for (const cell of board.legalCells(BOUNDS)) {
       const r = el('rect', { x: px(cell.x) + 3, y: px(cell.y) + 3, width: CELL - 6, height: CELL - 6, rx: 6, class: 'legal' });
       r.addEventListener('click', () => onCellTap(cell));
@@ -653,7 +682,7 @@ let ghostG = null;
 function showGhost(cell) {
   hideGhost();
   if (selIdx < 0) return;
-  const card = hands.white[selIdx];
+  const card = hands[humanColor()][selIdx];
   if (!card) return;
   ghostG = el('g', { class: 'ghost' });
   const edges = cardEdges(card.type, selOrient, cell.x, cell.y);
@@ -661,7 +690,7 @@ function showGhost(cell) {
     const p = nodePos(e[0]), q = nodePos(e[1]);
     ghostG.appendChild(el('line', { x1: px(p.x), y1: px(p.y), x2: px(q.x), y2: px(q.y), class: 'wire' }));
   }
-  drawCircleMark(ghostG, px(cell.x + 0.5), px(cell.y + 0.5), 'white');
+  drawCircleMark(ghostG, px(cell.x + 0.5), px(cell.y + 0.5), humanColor());
   svg.appendChild(ghostG);
 }
 function hideGhost() { if (ghostG) { ghostG.remove(); ghostG = null; } }
@@ -669,7 +698,8 @@ function hideGhost() { if (ghostG) { ghostG.remove(); ghostG = null; } }
 function renderHand() {
   const row = document.getElementById('hand-row');
   row.innerHTML = '';
-  hands.white.forEach((card, i) => {
+  const me = humanColor();
+  hands[me].forEach((card, i) => {
     const d = document.createElement('div');
     d.className = 'hcard' + (i === selIdx ? ' sel' : '');
     const s = document.createElementNS(SVGNS, 'svg');
@@ -683,7 +713,8 @@ function renderHand() {
     drawCircleMark(s, px(0.5), px(0.5), card.color);
     d.appendChild(s);
     d.addEventListener('click', () => {
-      if (turn !== 'white' || busy || gameOver) return;
+      if (busy || gameOver) return;
+      if (mode === 'cpu' && turn !== 'white') return;
       if (selIdx === i) {
         selOrient = (selOrient + 1) % orientCount(card.type);
       } else {
@@ -693,7 +724,9 @@ function renderHand() {
     });
     row.appendChild(d);
   });
-  document.getElementById('deck-info').textContent = T().deckInfo(decks.white.length, decks.black.length);
+  document.getElementById('deck-info').textContent = mode === '2p'
+    ? T().deckInfo2p(decks.white.length, decks.black.length)
+    : T().deckInfo(decks.white.length, decks.black.length);
 }
 
 function renderScores() {
@@ -802,22 +835,24 @@ function describeEvents(events) {
 }
 
 function onCellTap(cell) {
-  if (turn !== 'white' || busy || gameOver) return;
+  if (busy || gameOver) return;
+  if (mode === 'cpu' && turn !== 'white') return;
   if (selIdx < 0) { setStatus('statusPickFirst'); return; }
-  const card = hands.white[selIdx];
+  const player = humanColor();
+  const card = hands[player][selIdx];
   busy = true;
   hideGhost();
-  board.place(cell.x, cell.y, card.type, selOrient, 'white');
-  const events = resolvePlacement(board, 'white');
+  board.place(cell.x, cell.y, card.type, selOrient, player);
+  const events = resolvePlacement(board, player);
   for (const e of events) { if (e.winner) scores[e.winner] += e.points; }
-  hands.white.splice(selIdx, 1);
-  if (decks.white.length) hands.white.push(decks.white.pop());
+  hands[player].splice(selIdx, 1);
+  if (decks[player].length) hands[player].push(decks[player].pop());
   selIdx = -1; selOrient = 0;
   renderAll();
   if (events.length) setStatusEvents(events);
   fireCircuits(events, () => {
     renderScores();
-    nextTurn('black');
+    nextTurn(player === 'white' ? 'black' : 'white');
   });
 }
 
@@ -826,14 +861,17 @@ function nextTurn(next) {
   if (hands[next].length === 0) next = next === 'white' ? 'black' : 'white';
   turn = next;
   renderScores();
-  if (turn === 'black') {
+  if (mode === 'cpu' && turn === 'black') {
     busy = true;
     setStatus('statusThinking', [], true);
     setTimeout(cpuMove, 420);
   } else {
     busy = false;
-    setStatus('statusYourTurn');
+    selIdx = -1; selOrient = 0;
+    if (mode === '2p') setStatus(turn === 'white' ? 'turnOfWhite' : 'turnOfBlack');
+    else setStatus('statusYourTurn');
     renderBoard();
+    renderHand();
   }
 }
 
@@ -865,7 +903,9 @@ function endGame() {
 function renderResult() {
   if (!lastResult) return;
   const { w, b } = lastResult;
-  const title = w > b ? T().resultWin : w < b ? T().resultLose : T().resultDraw;
+  let title;
+  if (mode === '2p') title = w > b ? T().winnerWhite : w < b ? T().winnerBlack : T().resultDraw;
+  else title = w > b ? T().resultWin : w < b ? T().resultLose : T().resultDraw;
   document.getElementById('result-title').textContent = title;
   document.getElementById('result-detail').textContent = T().resultDetail(w, b);
 }
@@ -879,7 +919,11 @@ function applyLang() {
   document.getElementById('btn-rotate').textContent = T().rotate;
   document.getElementById('btn-rules-close').textContent = T().close;
   document.getElementById('btn-again').textContent = T().playAgain;
-  document.getElementById('lbl-you').textContent = T().you;
+  document.getElementById('lbl-you').textContent = mode === '2p' ? T().white : T().you;
+  document.getElementById('lbl-black').textContent = mode === '2p' ? T().black : 'CPU';
+  document.getElementById('mode-title').textContent = T().chooseMode;
+  document.getElementById('btn-mode-cpu').textContent = T().modeCpu;
+  document.getElementById('btn-mode-2p').textContent = T().mode2p;
   document.getElementById('rules-ja').classList.toggle('hidden', lang !== 'ja');
   document.getElementById('rules-en').classList.toggle('hidden', lang !== 'en');
   if (board) {
@@ -912,7 +956,19 @@ document.getElementById('rules-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('rules-modal'))
     document.getElementById('rules-modal').classList.add('hidden');
 });
-document.getElementById('btn-new').addEventListener('click', newGame);
+document.getElementById('btn-new').addEventListener('click', () => {
+  document.getElementById('mode-modal').classList.remove('hidden');
+});
+document.getElementById('btn-mode-cpu').addEventListener('click', () => {
+  mode = 'cpu';
+  document.getElementById('mode-modal').classList.add('hidden');
+  applyLang(); newGame();
+});
+document.getElementById('btn-mode-2p').addEventListener('click', () => {
+  mode = '2p';
+  document.getElementById('mode-modal').classList.add('hidden');
+  applyLang(); newGame();
+});
 document.getElementById('btn-again').addEventListener('click', newGame);
 window.addEventListener('resize', renderBoard);
 
@@ -926,6 +982,7 @@ window.addEventListener('resize', renderBoard);
 
 applyLang();
 newGame();
+document.getElementById('mode-modal').classList.remove('hidden');
 </script>
 </body>
 </html>
