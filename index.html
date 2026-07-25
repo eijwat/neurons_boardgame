@@ -941,8 +941,9 @@ document.getElementById('btn-lang').addEventListener('click', () => {
   applyLang();
 });
 document.getElementById('btn-rotate').addEventListener('click', () => {
-  if (selIdx < 0 || turn !== 'white' || busy) return;
-  selOrient = (selOrient + 1) % orientCount(hands.white[selIdx].type);
+  if (selIdx < 0 || busy || gameOver) return;
+  if (mode === 'cpu' && turn !== 'white') return;
+  selOrient = (selOrient + 1) % orientCount(hands[humanColor()][selIdx].type);
   renderHand(); hideGhost();
 });
 window.addEventListener('keydown', e => {
