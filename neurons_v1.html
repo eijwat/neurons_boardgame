@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>The NEURONS</title>
+<style>
+:root {
+  --cloth: #8FC6BC;
+  --cloth-zig: #A9D6CC;
+  --paper: #FDFBF4;
+  --paper-shadow: rgba(43,58,54,0.25);
+  --ink: #2B2B33;
+  --fire: #FFB13D;
+  --fire-deep: #F2801E;
+  --ui-green: #DDF0DC;
+  --p1: #E8A0A0; --p2: #A0C4E8; --p3: #E3D48F; --p4: #A8D8B0;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body {
+  font-family: 'Hiragino Maru Gothic ProN', 'BIZ UDGothic', 'Yu Gothic', 'Meiryo', sans-serif;
+  color: var(--ink);
+  background-color: var(--cloth);
+  background-image:
+    linear-gradient(135deg, var(--cloth-zig) 25%, transparent 25%),
+    linear-gradient(225deg, var(--cloth-zig) 25%, transparent 25%),
+    linear-gradient(315deg, var(--cloth-zig) 25%, transparent 25%),
+    linear-gradient(45deg, var(--cloth-zig) 25%, transparent 25%);
+  background-position: -28px 0, -28px 0, 0 0, 0 0;
+  background-size: 56px 56px;
+  display: flex; flex-direction: column; align-items: center;
+  overflow: hidden;
+}
+
+/* ---- header ---- */
+header {
+  width: 100%; max-width: 720px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px 4px; gap: 8px; flex: 0 0 auto;
+}
+.title-card {
+  background: var(--ui-green);
+  border-radius: 6px;
+  padding: 4px 12px 6px;
+  box-shadow: 1px 2px 4px var(--paper-shadow);
+  transform: rotate(-1.5deg);
+  user-select: none;
+  line-height: 1;
+}
+.title-card .the { font-size: 10px; letter-spacing: 2px; display:block; transform: rotate(2deg); margin-left: 4px;}
+.title-card .word { font-weight: 800; font-size: 24px; letter-spacing: 1px; }
+.title-card .word span { display: inline-block; }
+.title-card .word span:nth-child(4n+1){ color:#c76a6a; transform:rotate(-6deg) translateY(-1px);}
+.title-card .word span:nth-child(4n+2){ color:#5f87b8; transform:rotate(5deg);}
+.title-card .word span:nth-child(4n+3){ color:#b3a24a; transform:rotate(-4deg) translateY(1px);}
+.title-card .word span:nth-child(4n+0){ color:#6aa878; transform:rotate(6deg);}
+.scores { display: flex; gap: 8px; align-items: center; }
+.score-chip {
+  background: var(--paper); border-radius: 8px; padding: 4px 10px;
+  box-shadow: 1px 2px 4px var(--paper-shadow);
+  display: flex; align-items: center; gap: 6px; font-size: 14px;
+  border: 2px solid transparent;
+  transition: border-color .3s, transform .3s;
+}
+.score-chip.turn { border-color: var(--fire); }
+.score-chip .stone { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--ink); flex: 0 0 auto;}
+.score-chip .stone.black { background: var(--ink); }
+.score-chip .stone.white { background: var(--paper); }
+.score-chip b { font-size: 18px; min-width: 1.2em; text-align: right; }
+.score-chip small { opacity: .75; font-size: 11px; }
+.header-btns { display: flex; gap: 6px; }
+button.flat {
+  font-family: inherit; font-size: 12px; color: var(--ink);
+  background: var(--paper); border: none; border-radius: 8px; padding: 6px 10px;
+  box-shadow: 1px 2px 3px var(--paper-shadow); cursor: pointer;
+}
+button.flat:active { transform: translateY(1px); }
+
+/* ---- status line ---- */
+#status {
+  flex: 0 0 auto; font-size: 13px; padding: 3px 14px; margin: 2px 0;
+  background: rgba(253,251,244,.9); border-radius: 999px;
+  box-shadow: 0 1px 3px var(--paper-shadow);
+  min-height: 24px; display: flex; align-items: center; gap: 6px;
+  max-width: 94vw; text-align: center;
+}
+#status .pulse-dot { width:8px; height:8px; border-radius:50%; background: var(--ink); animation: thinking 1s infinite; }
+@keyframes thinking { 0%,100%{opacity:.2} 50%{opacity:1} }
+
+/* ---- board ---- */
+#board-wrap {
+  flex: 1 1 auto; width: 100%; max-width: 720px;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 0; padding: 4px 8px; position: relative;
+}
+#board { width: 100%; height: 100%; touch-action: manipulation; }
+.card-face { fill: var(--paper); stroke: rgba(43,43,51,.08); stroke-width: 1;
+  filter: drop-shadow(1px 2px 1.5px var(--paper-shadow)); }
+.wire { stroke: var(--ink); stroke-width: 2.5; stroke-linecap: round; fill: none; }
+.legal { fill: rgba(253,251,244,.28); stroke: rgba(43,43,51,.55); stroke-width: 1.5;
+  stroke-dasharray: 5 5; rx: 6; cursor: pointer; }
+.legal:hover { fill: rgba(255,177,61,.35); }
+.ghost { opacity: .45; pointer-events: none; }
+.fire-edge { stroke: var(--fire-deep); stroke-width: 5; stroke-linecap: round; fill: none;
+  filter: drop-shadow(0 0 4px var(--fire)); }
+.fire-poly { fill: var(--fire); opacity: 0; }
+@keyframes polyflash { 0%{opacity:0} 25%{opacity:.4} 100%{opacity:0} }
+.float-pts {
+  position: absolute; font-weight: 800; font-size: 26px; pointer-events: none;
+  text-shadow: 0 1px 0 var(--paper), 0 0 8px var(--paper);
+  animation: floatup 1.6s ease-out forwards;
+}
+@keyframes floatup { 0%{opacity:0; transform:translate(-50%,0) scale(.6)} 15%{opacity:1; transform:translate(-50%,-10px) scale(1.15)} 30%{transform:translate(-50%,-14px) scale(1)} 100%{opacity:0; transform:translate(-50%,-46px)} }
+
+/* ---- hand ---- */
+#hand-area {
+  flex: 0 0 auto; width: 100%; max-width: 720px;
+  padding: 6px 8px calc(10px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 6px; align-items: center;
+}
+#hand-row { display: flex; gap: 8px; align-items: flex-end; justify-content: center; width: 100%; }
+.hcard {
+  width: 58px; height: 58px; background: var(--paper); border-radius: 6px;
+  box-shadow: 1px 2px 4px var(--paper-shadow); cursor: pointer; flex: 0 0 auto;
+  transition: transform .15s, box-shadow .15s; position: relative;
+  border: 2.5px solid transparent;
+}
+.hcard:nth-child(odd){ transform: rotate(-1.5deg); }
+.hcard:nth-child(even){ transform: rotate(1.2deg); }
+.hcard.sel { border-color: var(--fire-deep); transform: translateY(-8px) rotate(0deg) scale(1.08); z-index: 2;
+  box-shadow: 2px 6px 10px var(--paper-shadow); }
+.hcard svg { width: 100%; height: 100%; display: block; }
+#hand-tools { display: flex; gap: 10px; align-items: center; font-size: 12px; }
+#deck-info { background: rgba(253,251,244,.85); border-radius: 999px; padding: 3px 10px; box-shadow: 0 1px 2px var(--paper-shadow); }
+
+/* ---- modal ---- */
+.modal-bg {
+  position: fixed; inset: 0; background: rgba(43,43,51,.45);
+  display: flex; align-items: center; justify-content: center; z-index: 20; padding: 16px;
+}
+.modal {
+  background: var(--paper); border-radius: 12px; max-width: 460px; width: 100%;
+  max-height: 84vh; overflow-y: auto; padding: 20px 22px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.3);
+}
+.modal h2 { font-size: 18px; margin-bottom: 10px; }
+.modal h3 { font-size: 14px; margin: 12px 0 4px; color: #6aa878; }
+.modal p, .modal li { font-size: 13px; line-height: 1.7; }
+.modal ol { padding-left: 20px; }
+.modal .close-row { text-align: center; margin-top: 14px; }
+.hidden { display: none !important; }
+
+/* ---- result overlay ---- */
+#result-card {
+  background: var(--ui-green); border-radius: 12px; padding: 26px 34px; text-align: center;
+  box-shadow: 0 8px 30px rgba(0,0,0,.3); transform: rotate(-1deg);
+}
+#result-card h2 { font-size: 26px; margin-bottom: 6px; }
+#result-card p { font-size: 15px; margin-bottom: 16px; }
+
+@media (max-width: 420px) {
+  .title-card .word { font-size: 18px; }
+  .score-chip { padding: 3px 7px; font-size: 12px; }
+  .score-chip b { font-size: 15px; }
+  .hcard { width: 50px; height: 50px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-card">
+    <span class="the">The</span>
+    <span class="word" id="title-word"></span>
+  </div>
+  <div class="scores">
+    <div class="score-chip" id="chip-white"><span class="stone white"></span><span><small>あなた</small></span><b id="score-white">0</b></div>
+    <div class="score-chip" id="chip-black"><span class="stone black"></span><span><small>CPU</small></span><b id="score-black">0</b></div>
+  </div>
+  <div class="header-btns">
+    <button class="flat" id="btn-rules">ルール</button>
+    <button class="flat" id="btn-new">新規</button>
+  </div>
+</header>
+
+<div id="status"><span id="status-text">カードを選んで置いてください</span></div>
+
+<div id="board-wrap">
+  <svg id="board" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+
+<div id="hand-area">
+  <div id="hand-tools">
+    <span id="deck-info">山札 あなた:19 / CPU:19</span>
+    <button class="flat" id="btn-rotate">回転 ⟳</button>
+  </div>
+  <div id="hand-row"></div>
+</div>
+
+<div class="modal-bg hidden" id="rules-modal">
+  <div class="modal">
+    <h2>The NEURONS ルール v0.1</h2>
+    <p>白(あなた)と黒(CPU)に分かれて、ニューロンのネットワークを育てます。線が閉じて多角形(サーキット)ができたら発火、得点です。</p>
+    <h3>手番</h3>
+    <ol>
+      <li>手札から1枚を、すでに置かれたカードと辺で接する空きマスに置く(最初の1枚は中央)。回転は自由。</li>
+      <li>置けるのは自分の色の丸のカードだけ。置いたら自分の山札から1枚引く。</li>
+    </ol>
+    <h3>接続とサーキット</h3>
+    <ol>
+      <li>線はカードの角で出入りする。隣のカードと角で線がつながる。</li>
+      <li>線が閉じて多角形ができたら「サーキット完成」。1枚で複数同時に完成することもある。</li>
+      <li>一度使った線を辺の一部として、別の多角形を後から作ってもよい。ただし完全に同一の多角形は再得点なし。</li>
+    </ol>
+    <h3>得点</h3>
+    <ol>
+      <li>サーキットの辺上にある丸と、内側に囲われた「丸のみカード」を色ごとに数える。</li>
+      <li>多い色のプレイヤーが、丸の<b>総数</b>を得点する。同数なら完成させたプレイヤーが得点。</li>
+    </ol>
+    <h3>終了</h3>
+    <p>両者が全カードを置き切ったら終了。合計点の多い方が勝ち。</p>
+    <h3>カード構成(各色24枚)</h3>
+    <p>ななめ線 ×8、V字線 ×8、十字線 ×4、丸のみ ×4</p>
+    <div class="close-row"><button class="flat" id="btn-rules-close">閉じる</button></div>
+  </div>
+</div>
+
+<div class="modal-bg hidden" id="result-modal">
+  <div id="result-card">
+    <h2 id="result-title"></h2>
+    <p id="result-detail"></p>
+    <button class="flat" id="btn-again">もう一度あそぶ</button>
+  </div>
+</div>
+
+<script>
+/* ================= core logic (tested) ================= */
+function cornerKey(x, y) { return 'C:' + x + ',' + y; }
+function centerKey(x, y) { return 'M:' + x + ',' + y; }
+function nodePos(key) {
+  const parts = key.split(':');
+  const xy = parts[1].split(',').map(Number);
+  if (parts[0] === 'C') return { x: xy[0], y: xy[1] };
+  return { x: xy[0] + 0.5, y: xy[1] + 0.5 };
+}
+function cardEdges(type, orient, x, y) {
+  const TL = cornerKey(x, y), TR = cornerKey(x + 1, y);
+  const BL = cornerKey(x, y + 1), BR = cornerKey(x + 1, y + 1);
+  const M = centerKey(x, y);
+  switch (type) {
+    case 'diag': return orient % 2 === 0 ? [[TL, M], [M, BR]] : [[TR, M], [M, BL]];
+    case 'vee': {
+      const o = ((orient % 4) + 4) % 4;
+      if (o === 0) return [[TL, M], [M, TR]];
+      if (o === 1) return [[TR, M], [M, BR]];
+      if (o === 2) return [[BL, M], [M, BR]];
+      return [[TL, M], [M, BL]];
+    }
+    case 'cross': return [[TL, M], [TR, M], [BL, M], [BR, M]];
+    case 'dot': return [];
+  }
+}
+function orientCount(type) { return type === 'diag' ? 2 : type === 'vee' ? 4 : 1; }
+
+class Board {
+  constructor() { this.cells = new Map(); this.scoredFaces = new Set(); }
+  key(x, y) { return x + ',' + y; }
+  get(x, y) { return this.cells.get(this.key(x, y)); }
+  place(x, y, type, orient, color) { this.cells.set(this.key(x, y), { type, orient, color, x, y }); }
+  unplace(x, y) { this.cells.delete(this.key(x, y)); }
+  isEmpty() { return this.cells.size === 0; }
+  legalCells(bounds) {
+    const out = [];
+    if (this.isEmpty()) return [{ x: bounds.cx, y: bounds.cy }];
+    const seen = new Set();
+    for (const c of this.cells.values()) {
+      for (const d of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = c.x + d[0], ny = c.y + d[1];
+        const k = this.key(nx, ny);
+        if (this.cells.has(k) || seen.has(k)) continue;
+        if (nx < 0 || ny < 0 || nx >= bounds.w || ny >= bounds.h) continue;
+        seen.add(k); out.push({ x: nx, y: ny });
+      }
+    }
+    return out;
+  }
+  buildGraph() {
+    const adj = new Map();
+    const addEdge = (a, b) => {
+      if (!adj.has(a)) adj.set(a, new Set());
+      if (!adj.has(b)) adj.set(b, new Set());
+      adj.get(a).add(b); adj.get(b).add(a);
+    };
+    for (const c of this.cells.values())
+      for (const e of cardEdges(c.type, c.orient, c.x, c.y)) addEdge(e[0], e[1]);
+    return adj;
+  }
+}
+
+function enumerateFaces(adj) {
+  const sorted = new Map();
+  for (const [v, nbrs] of adj) {
+    const p = nodePos(v);
+    const list = [...nbrs].map(n => {
+      const q = nodePos(n);
+      return { n, ang: Math.atan2(q.y - p.y, q.x - p.x) };
+    }).sort((a, b) => a.ang - b.ang);
+    sorted.set(v, list);
+  }
+  const nextOut = (v, fromNode) => {
+    const list = sorted.get(v);
+    const p = nodePos(v), q = nodePos(fromNode);
+    const revAng = Math.atan2(q.y - p.y, q.x - p.x);
+    let idx = 0;
+    while (idx < list.length && list[idx].ang <= revAng + 1e-12) idx++;
+    if (idx >= list.length) idx = 0;
+    return list[idx].n;
+  };
+  const visited = new Set();
+  const faces = [];
+  for (const [u, nbrs] of adj) {
+    for (const v of nbrs) {
+      if (visited.has(u + '|' + v)) continue;
+      const walk = [u];
+      let a = u, b = v, guard = 0;
+      while (guard++ < 10000) {
+        visited.add(a + '|' + b);
+        walk.push(b);
+        const c = nextOut(b, a);
+        a = b; b = c;
+        if (a === u && b === v) break;
+      }
+      walk.pop();
+      faces.push(walk);
+    }
+  }
+  return faces;
+}
+function signedArea(walk) {
+  let s = 0;
+  for (let i = 0; i < walk.length; i++) {
+    const p = nodePos(walk[i]);
+    const q = nodePos(walk[(i + 1) % walk.length]);
+    s += p.x * q.y - q.x * p.y;
+  }
+  return s / 2;
+}
+function pruneSpurs(walk) {
+  let w = walk.slice(), changed = true;
+  while (changed && w.length > 2) {
+    changed = false;
+    for (let i = 0; i < w.length; i++) {
+      const prev = w[(i - 1 + w.length) % w.length];
+      const next = w[(i + 1) % w.length];
+      if (prev === next) {
+        const j = (i + 1) % w.length;
+        const rm = [i, j].sort((a, b) => b - a);
+        w.splice(rm[0], 1); w.splice(rm[1], 1);
+        changed = true; break;
+      }
+    }
+  }
+  return w;
+}
+function faceSignature(cycle) {
+  const edges = [];
+  for (let i = 0; i < cycle.length; i++) {
+    const a = cycle[i], b = cycle[(i + 1) % cycle.length];
+    edges.push(a < b ? a + '~' + b : b + '~' + a);
+  }
+  return edges.sort().join(';');
+}
+function pointInPoly(px, py, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
+    const inter = ((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi);
+    if (inter) inside = !inside;
+  }
+  return inside;
+}
+function boundedFaces(board) {
+  const adj = board.buildGraph();
+  if (adj.size === 0) return [];
+  const faces = enumerateFaces(adj);
+  const out = []; const seen = new Set();
+  for (const walk of faces) {
+    const cycle = pruneSpurs(walk);
+    if (cycle.length < 3) continue;
+    const area = signedArea(cycle);
+    if (Math.abs(area) < 1e-9) continue;
+    if (area >= 0) continue;
+    const sig = faceSignature(cycle);
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    out.push({ cycle, signature: sig, area });
+  }
+  return out;
+}
+function faceCircles(board, face) {
+  let white = 0, black = 0;
+  const contributing = [];
+  const onCycle = new Set(face.cycle);
+  for (const c of board.cells.values()) {
+    if (c.type === 'dot') continue;
+    if (onCycle.has(centerKey(c.x, c.y))) {
+      if (c.color === 'white') white++; else black++;
+      contributing.push(c);
+    }
+  }
+  const pts = face.cycle.map(nodePos);
+  for (const c of board.cells.values()) {
+    if (c.type !== 'dot') continue;
+    if (pointInPoly(c.x + 0.5, c.y + 0.5, pts)) {
+      if (c.color === 'white') white++; else black++;
+      contributing.push(c);
+    }
+  }
+  return { white, black, contributing };
+}
+function resolvePlacement(board, mover) {
+  const faces = boundedFaces(board);
+  const events = [];
+  for (const f of faces) {
+    if (board.scoredFaces.has(f.signature)) continue;
+    board.scoredFaces.add(f.signature);
+    const r = faceCircles(board, f);
+    const total = r.white + r.black;
+    if (total === 0) continue;
+    let winner;
+    if (r.white > r.black) winner = 'white';
+    else if (r.black > r.white) winner = 'black';
+    else winner = mover;
+    events.push({ signature: f.signature, cycle: f.cycle, white: r.white, black: r.black, winner, points: total });
+  }
+  return events;
+}
+function makeDeck(color) {
+  const deck = [];
+  const push = (type, n) => { for (let i = 0; i < n; i++) deck.push({ type, color }); };
+  push('diag', 8); push('vee', 8); push('cross', 4); push('dot', 4);
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = deck[i]; deck[i] = deck[j]; deck[j] = t;
+  }
+  return deck;
+}
+function aiChooseMove(board, hand, color, bounds) {
+  const cells = board.legalCells(bounds);
+  const oppColor = color === 'white' ? 'black' : 'white';
+  const candidates = [];
+  const handTypes = new Set();
+  for (let hi = 0; hi < hand.length; hi++) {
+    const card = hand[hi];
+    if (handTypes.has(card.type)) continue;
+    handTypes.add(card.type);
+    for (let o = 0; o < orientCount(card.type); o++) {
+      for (const cell of cells) {
+        board.place(cell.x, cell.y, card.type, o, color);
+        const savedScored = board.scoredFaces;
+        board.scoredFaces = new Set(savedScored);
+        const events = resolvePlacement(board, color);
+        let gain = 0, loss = 0;
+        for (const e of events) { if (e.winner === color) gain += e.points; else loss += e.points; }
+        candidates.push({ type: card.type, orient: o, cell, gain, loss, newScored: board.scoredFaces });
+        board.scoredFaces = savedScored;
+        board.unplace(cell.x, cell.y);
+      }
+    }
+  }
+  for (const c of candidates) c.value = c.gain * 10 - c.loss * 10 + Math.random() * 0.5;
+  candidates.sort((a, b) => b.value - a.value);
+  const top = candidates.slice(0, 8);
+  const genericTypes = [['diag',0],['diag',1],['vee',0],['vee',1],['vee',2],['vee',3],['cross',0]];
+  for (const c of top) {
+    board.place(c.cell.x, c.cell.y, c.type, c.orient, color);
+    const savedScored = board.scoredFaces;
+    board.scoredFaces = c.newScored;
+    let oppBest = 0;
+    const oppCells = board.legalCells(bounds);
+    for (const t of genericTypes) {
+      for (const cell of oppCells) {
+        board.place(cell.x, cell.y, t[0], t[1], oppColor);
+        const s2 = board.scoredFaces;
+        board.scoredFaces = new Set(s2);
+        const events = resolvePlacement(board, oppColor);
+        let g = 0;
+        for (const e of events) if (e.winner === oppColor) g += e.points;
+        if (g > oppBest) oppBest = g;
+        board.scoredFaces = s2;
+        board.unplace(cell.x, cell.y);
+      }
+    }
+    board.scoredFaces = savedScored;
+    board.unplace(c.cell.x, c.cell.y);
+    c.value = c.gain * 10 - c.loss * 10 - oppBest * 6 + Math.random() * 0.5;
+  }
+  top.sort((a, b) => b.value - a.value);
+  const best = top[0] || candidates[0];
+  if (!best) return null;
+  const hi = hand.findIndex(h => h.type === best.type);
+  return { hi, type: best.type, orient: best.orient, cell: best.cell };
+}
+
+/* ================= game state ================= */
+const BOUNDS = { w: 11, h: 11, cx: 5, cy: 5 };
+const CELL = 56;
+const SVGNS = 'http://www.w3.org/2000/svg';
+
+let board, decks, hands, scores, turn, selIdx, selOrient, gameOver, busy;
+
+function newGame() {
+  board = new Board();
+  decks = { white: makeDeck('white'), black: makeDeck('black') };
+  hands = { white: decks.white.splice(0, 5), black: decks.black.splice(0, 5) };
+  scores = { white: 0, black: 0 };
+  turn = 'white';
+  selIdx = -1; selOrient = 0; gameOver = false; busy = false;
+  document.getElementById('result-modal').classList.add('hidden');
+  setStatus('カードを選んで、光っているマスに置いてください');
+  renderAll();
+}
+
+/* ================= rendering ================= */
+const svg = document.getElementById('board');
+
+function el(name, attrs) {
+  const n = document.createElementNS(SVGNS, name);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  return n;
+}
+function px(v) { return v * CELL; }
+
+function drawCircleMark(parent, cx, cy, color, r) {
+  r = r || 7;
+  const c = el('circle', { cx, cy, r, 'stroke-width': 2.5, stroke: 'var(--ink)',
+    fill: color === 'black' ? 'var(--ink)' : 'var(--paper)' });
+  parent.appendChild(c);
+  // handmade scribble feel: a second slightly offset ring
+  const c2 = el('circle', { cx: cx + 1, cy: cy - 0.5, r: r - 2, 'stroke-width': 1.2,
+    stroke: color === 'black' ? 'rgba(253,251,244,.35)' : 'rgba(43,43,51,.45)', fill: 'none' });
+  parent.appendChild(c2);
+}
+
+function drawCardInto(parent, card, orient, ox, oy, scale) {
+  scale = scale || 1;
+  const g = el('g', { transform: 'translate(' + ox + ',' + oy + ') scale(' + scale + ')' });
+  const edges = cardEdges(card.type, orient, 0, 0);
+  for (const e of edges) {
+    const p = nodePos(e[0]), q = nodePos(e[1]);
+    g.appendChild(el('line', { x1: px(p.x), y1: px(p.y), x2: px(q.x), y2: px(q.y), class: 'wire' }));
+  }
+  drawCircleMark(g, px(0.5), px(0.5), card.color);
+  parent.appendChild(g);
+  return g;
+}
+
+function computeViewBox() {
+  if (board.isEmpty()) {
+    const m = 1.6;
+    return [(BOUNDS.cx - m) * CELL, (BOUNDS.cy - m) * CELL, (2 * m + 1) * CELL, (2 * m + 1) * CELL];
+  }
+  let minX = 99, minY = 99, maxX = -1, maxY = -1;
+  for (const c of board.cells.values()) {
+    minX = Math.min(minX, c.x); minY = Math.min(minY, c.y);
+    maxX = Math.max(maxX, c.x); maxY = Math.max(maxY, c.y);
+  }
+  const m = 1.35;
+  return [(minX - m) * CELL, (minY - m) * CELL, (maxX - minX + 1 + 2 * m) * CELL, (maxY - minY + 1 + 2 * m) * CELL];
+}
+
+function renderBoard() {
+  svg.innerHTML = '';
+  const vb = computeViewBox();
+  svg.setAttribute('viewBox', vb.join(' '));
+  // cards
+  for (const c of board.cells.values()) {
+    const g = el('g', {});
+    g.appendChild(el('rect', { x: px(c.x) + 1.5, y: px(c.y) + 1.5, width: CELL - 3, height: CELL - 3, rx: 4, class: 'card-face' }));
+    svg.appendChild(g);
+  }
+  // wires drawn above all card faces so they join seamlessly
+  for (const c of board.cells.values()) {
+    for (const e of cardEdges(c.type, c.orient, c.x, c.y)) {
+      const p = nodePos(e[0]), q = nodePos(e[1]);
+      svg.appendChild(el('line', { x1: px(p.x), y1: px(p.y), x2: px(q.x), y2: px(q.y), class: 'wire' }));
+    }
+  }
+  for (const c of board.cells.values()) {
+    drawCircleMark(svg, px(c.x + 0.5), px(c.y + 0.5), c.color);
+  }
+  // legal cells for human turn
+  if (!gameOver && turn === 'white' && !busy) {
+    for (const cell of board.legalCells(BOUNDS)) {
+      const r = el('rect', { x: px(cell.x) + 3, y: px(cell.y) + 3, width: CELL - 6, height: CELL - 6, rx: 6, class: 'legal' });
+      r.addEventListener('click', () => onCellTap(cell));
+      r.addEventListener('mouseenter', () => showGhost(cell));
+      r.addEventListener('mouseleave', hideGhost);
+      svg.appendChild(r);
+    }
+  }
+}
+
+let ghostG = null;
+function showGhost(cell) {
+  hideGhost();
+  if (selIdx < 0) return;
+  const card = hands.white[selIdx];
+  if (!card) return;
+  ghostG = el('g', { class: 'ghost' });
+  const edges = cardEdges(card.type, selOrient, cell.x, cell.y);
+  for (const e of edges) {
+    const p = nodePos(e[0]), q = nodePos(e[1]);
+    ghostG.appendChild(el('line', { x1: px(p.x), y1: px(p.y), x2: px(q.x), y2: px(q.y), class: 'wire' }));
+  }
+  drawCircleMark(ghostG, px(cell.x + 0.5), px(cell.y + 0.5), 'white');
+  svg.appendChild(ghostG);
+}
+function hideGhost() { if (ghostG) { ghostG.remove(); ghostG = null; } }
+
+function renderHand() {
+  const row = document.getElementById('hand-row');
+  row.innerHTML = '';
+  hands.white.forEach((card, i) => {
+    const d = document.createElement('div');
+    d.className = 'hcard' + (i === selIdx ? ' sel' : '');
+    const s = document.createElementNS(SVGNS, 'svg');
+    s.setAttribute('viewBox', '0 0 ' + CELL + ' ' + CELL);
+    const o = i === selIdx ? selOrient : 0;
+    const edges = cardEdges(card.type, o, 0, 0);
+    for (const e of edges) {
+      const p = nodePos(e[0]), q = nodePos(e[1]);
+      s.appendChild(el('line', { x1: px(p.x), y1: px(p.y), x2: px(q.x), y2: px(q.y), class: 'wire' }));
+    }
+    drawCircleMark(s, px(0.5), px(0.5), card.color);
+    d.appendChild(s);
+    d.addEventListener('click', () => {
+      if (turn !== 'white' || busy || gameOver) return;
+      if (selIdx === i) {
+        selOrient = (selOrient + 1) % orientCount(card.type);
+      } else {
+        selIdx = i; selOrient = 0;
+      }
+      renderHand(); renderBoard();
+    });
+    row.appendChild(d);
+  });
+  document.getElementById('deck-info').textContent =
+    '山札 あなた:' + decks.white.length + ' / CPU:' + decks.black.length;
+}
+
+function renderScores() {
+  document.getElementById('score-white').textContent = scores.white;
+  document.getElementById('score-black').textContent = scores.black;
+  document.getElementById('chip-white').classList.toggle('turn', turn === 'white' && !gameOver);
+  document.getElementById('chip-black').classList.toggle('turn', turn === 'black' && !gameOver);
+}
+
+function renderAll() { renderBoard(); renderHand(); renderScores(); }
+
+function setStatus(text, thinking) {
+  const s = document.getElementById('status');
+  s.innerHTML = '';
+  if (thinking) {
+    const d = document.createElement('span'); d.className = 'pulse-dot'; s.appendChild(d);
+  }
+  const t = document.createElement('span'); t.textContent = text; s.appendChild(t);
+}
+
+/* ================= firing animation ================= */
+function fireCircuits(events, done) {
+  if (events.length === 0) { done(); return; }
+  let delay = 0;
+  const wrap = document.getElementById('board-wrap');
+  for (const ev of events) {
+    setTimeout(() => {
+      // polygon flash
+      const pts = ev.cycle.map(nodePos).map(p => px(p.x) + ',' + px(p.y)).join(' ');
+      const poly = el('polygon', { points: pts, class: 'fire-poly' });
+      poly.style.animation = 'polyflash 1.1s ease-out forwards';
+      svg.appendChild(poly);
+      // pulse along edges
+      let per = 0;
+      const segs = [];
+      for (let i = 0; i < ev.cycle.length; i++) {
+        const p = nodePos(ev.cycle[i]), q = nodePos(ev.cycle[(i + 1) % ev.cycle.length]);
+        const len = Math.hypot(q.x - p.x, q.y - p.y) * CELL;
+        segs.push({ p, q, len }); per += len;
+      }
+      const path = el('path', { class: 'fire-edge',
+        d: 'M' + segs.map(s => px(s.p.x) + ' ' + px(s.p.y)).join(' L') + ' Z' });
+      path.style.strokeDasharray = (per * 0.22) + ' ' + per;
+      path.style.strokeDashoffset = per * 0.22;
+      svg.appendChild(path);
+      let t0 = null;
+      const dur = 900;
+      function step(ts) {
+        if (!t0) t0 = ts;
+        const k = Math.min(1, (ts - t0) / dur);
+        path.style.strokeDashoffset = per * 0.22 - (per + per * 0.44) * k;
+        path.style.opacity = 1 - k * 0.6;
+        if (k < 1) requestAnimationFrame(step);
+        else { path.remove(); }
+      }
+      requestAnimationFrame(step);
+      setTimeout(() => poly.remove(), 1200);
+      // floating points near polygon centroid
+      let cx = 0, cy = 0;
+      for (const n of ev.cycle) { const p = nodePos(n); cx += p.x; cy += p.y; }
+      cx /= ev.cycle.length; cy /= ev.cycle.length;
+      const vb = svg.viewBox.baseVal;
+      const rect = svg.getBoundingClientRect();
+      const wrapRect = wrap.getBoundingClientRect();
+      // svg content is scaled preserving aspect ratio, centered
+      const scale = Math.min(rect.width / vb.width, rect.height / vb.height);
+      const offX = (rect.width - vb.width * scale) / 2 + (rect.left - wrapRect.left);
+      const offY = (rect.height - vb.height * scale) / 2 + (rect.top - wrapRect.top);
+      const fx = offX + (px(cx) - vb.x) * scale;
+      const fy = offY + (px(cy) - vb.y) * scale;
+      const f = document.createElement('div');
+      f.className = 'float-pts';
+      f.style.left = fx + 'px'; f.style.top = fy + 'px';
+      f.style.color = ev.winner === 'white' ? '#F6F3E8' : 'var(--ink)';
+      f.textContent = (ev.winner === 'white' ? '白' : '黒') + ' +' + ev.points;
+      wrap.appendChild(f);
+      setTimeout(() => f.remove(), 1700);
+    }, delay);
+    delay += 750;
+  }
+  setTimeout(done, delay + 900);
+}
+
+/* ================= turn flow ================= */
+function describeEvents(events, mover) {
+  return events.map(ev => {
+    const tie = ev.white === ev.black;
+    const who = ev.winner === 'white' ? '白' : '黒';
+    return 'サーキット完成! 白' + ev.white + '・黒' + ev.black +
+      (tie ? '(同数、完成者の得点)' : '') + ' → ' + who + 'が' + ev.points + '点';
+  }).join(' / ');
+}
+
+function onCellTap(cell) {
+  if (turn !== 'white' || busy || gameOver) return;
+  if (selIdx < 0) { setStatus('先に手札からカードを選んでください'); return; }
+  const card = hands.white[selIdx];
+  busy = true;
+  hideGhost();
+  board.place(cell.x, cell.y, card.type, selOrient, 'white');
+  const events = resolvePlacement(board, 'white');
+  for (const e of events) scores[e.winner] += e.points;
+  hands.white.splice(selIdx, 1);
+  if (decks.white.length) hands.white.push(decks.white.pop());
+  selIdx = -1; selOrient = 0;
+  renderAll();
+  if (events.length) setStatus(describeEvents(events, 'white'));
+  fireCircuits(events, () => {
+    renderScores();
+    nextTurn('black');
+  });
+}
+
+function nextTurn(next) {
+  if (hands.white.length === 0 && hands.black.length === 0) { endGame(); return; }
+  if (hands[next].length === 0) next = next === 'white' ? 'black' : 'white';
+  turn = next;
+  renderScores();
+  if (turn === 'black') {
+    busy = true;
+    setStatus('CPUが考えています', true);
+    setTimeout(cpuMove, 420);
+  } else {
+    busy = false;
+    setStatus('あなたの番です');
+    renderBoard();
+  }
+}
+
+function cpuMove() {
+  const mv = aiChooseMove(board, hands.black, 'black', BOUNDS);
+  if (!mv) { nextTurn('white'); return; }
+  board.place(mv.cell.x, mv.cell.y, mv.type, mv.orient, 'black');
+  const events = resolvePlacement(board, 'black');
+  for (const e of events) scores[e.winner] += e.points;
+  hands.black.splice(mv.hi, 1);
+  if (decks.black.length) hands.black.push(decks.black.pop());
+  renderAll();
+  if (events.length) setStatus(describeEvents(events, 'black'));
+  else setStatus('CPUがカードを置きました');
+  fireCircuits(events, () => {
+    renderScores();
+    nextTurn('white');
+  });
+}
+
+function endGame() {
+  gameOver = true; busy = false;
+  renderScores();
+  const w = scores.white, b = scores.black;
+  const title = w > b ? 'あなたの勝ち!' : w < b ? 'CPUの勝ち' : '引き分け';
+  document.getElementById('result-title').textContent = title;
+  document.getElementById('result-detail').textContent = '白 ' + w + ' 対 黒 ' + b;
+  setTimeout(() => document.getElementById('result-modal').classList.remove('hidden'), 700);
+  setStatus('ゲーム終了 白' + w + ' 対 黒' + b);
+}
+
+/* ================= wiring ================= */
+document.getElementById('btn-rotate').addEventListener('click', () => {
+  if (selIdx < 0 || turn !== 'white' || busy) return;
+  selOrient = (selOrient + 1) % orientCount(hands.white[selIdx].type);
+  renderHand(); hideGhost();
+});
+window.addEventListener('keydown', e => {
+  if (e.key === 'r' || e.key === 'R') document.getElementById('btn-rotate').click();
+});
+document.getElementById('btn-rules').addEventListener('click', () =>
+  document.getElementById('rules-modal').classList.remove('hidden'));
+document.getElementById('btn-rules-close').addEventListener('click', () =>
+  document.getElementById('rules-modal').classList.add('hidden'));
+document.getElementById('rules-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('rules-modal'))
+    document.getElementById('rules-modal').classList.add('hidden');
+});
+document.getElementById('btn-new').addEventListener('click', newGame);
+document.getElementById('btn-again').addEventListener('click', newGame);
+window.addEventListener('resize', renderBoard);
+
+// hand-lettered title
+(function () {
+  const w = document.getElementById('title-word');
+  'NEURONS'.split('').forEach(ch => {
+    const s = document.createElement('span');
+    s.textContent = ch; w.appendChild(s);
+  });
+})();
+
+newGame();
+</script>
+</body>
+</html>
