@@ -209,7 +209,7 @@ button.flat:active { transform: translateY(1px); }
       <p>白(あなた)と黒(CPU)に分かれて、ニューロンのネットワークを育てます。線が閉じて多角形(サーキット)ができたら発火、得点です。</p>
       <h3>手番</h3>
       <ol>
-        <li>手札から1枚を、すでに置かれたカードと辺または角で接する空きマスに置く(最初の1枚は中央)。回転は自由。モード選択で「辺のみ」を選ぶと、辺で接するマスに限定される。</li>
+        <li>手札から1枚を、すでに置かれたカードと辺で接する空きマスに置く(最初の1枚は中央)。回転は自由。モード選択で「斜めもあり」を選ぶと、角だけが接するマスにも置ける。</li>
         <li>置けるのは自分の色の丸のカードだけ。置いたら自分の山札から1枚引く。</li>
       </ol>
       <h3>接続とサーキット</h3>
@@ -233,7 +233,7 @@ button.flat:active { transform: translateY(1px); }
       <p>White (you) versus Black (CPU): grow a network of neurons. When lines close into a polygon, the circuit fires and someone scores.</p>
       <h3>Your turn</h3>
       <ol>
-        <li>Place one card from your hand on an empty cell that touches a placed card by an edge or a corner (the first card goes in the center). Rotate freely. With “Edges only” selected, placement is restricted to edge-adjacent cells.</li>
+        <li>Place one card from your hand on an empty cell that shares an edge with a placed card (the first card goes in the center). Rotate freely. With “Diagonals too” selected, cells touching only at a corner are also legal.</li>
         <li>You may only place cards with circles of your own color. After placing, draw one card from your deck.</li>
       </ol>
       <h3>Connections and circuits</h3>
@@ -261,8 +261,8 @@ button.flat:active { transform: translateY(1px); }
     <h2 id="mode-title"></h2>
     <div id="place-opt">
       <div id="place-label"></div>
-      <button class="flat opt sel" id="btn-place-diag"></button>
-      <button class="flat opt" id="btn-place-edge"></button>
+      <button class="flat opt sel" id="btn-place-edge"></button>
+      <button class="flat opt" id="btn-place-diag"></button>
     </div>
     <div>
       <button class="flat" id="btn-mode-cpu"></button>
@@ -610,7 +610,7 @@ const CELL = 56;
 const SVGNS = 'http://www.w3.org/2000/svg';
 
 let mode = 'cpu';
-let diagPlacement = true;
+let diagPlacement = false;
 let board, decks, hands, scores, turn, selIdx, selOrient, gameOver, busy;
 let lastStatus = { key: 'statusStart', args: [], thinking: false };
 let lastResult = null;

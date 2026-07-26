@@ -1,4 +1,4 @@
-# The NEURONS Boardgame
+# The NEURONS
 
 *[English](#english) | [日本語](#日本語)*
 
@@ -21,6 +21,7 @@ White (you) and Black (CPU) take turns placing cards to grow a shared network of
 When lines close into a polygon, the circuit fires. Count the circles on the circuit's perimeter, plus any circle-only cards enclosed inside it. The player whose color has the majority scores the total count of circles. On a tie the circuit fizzles: nobody scores, and that exact polygon can never score again.
 
 - Hand of 5 cards. Place one, draw one, from your own deck.
+- Cards go on empty cells that touch a placed card by an edge or a corner (an edge-only variant is available in the mode selector).
 - Each deck (24 cards per color): diagonal ×8, V-line ×8, cross ×4, circle only ×4.
 - Cards may be rotated freely before placing.
 - Lines that already scored can be reused as edges of a new, different polygon.
@@ -39,7 +40,7 @@ Tap a card in your hand to select it, tap it again (or the Rotate button, or the
 
 ### Hosting on GitHub Pages
 
-[Neurons Board Game](https://eijwat.github.io/neurons_boardgame/)
+Put `index.html` at the repository root, enable Pages in the repository settings (deploy from branch), and the game is live.
 
 ---
 
@@ -56,6 +57,7 @@ Tap a card in your hand to select it, tap it again (or the Rotate button, or the
 線が閉じて多角形ができたら、サーキットの発火です。多角形の辺上にある丸と、内側に囲われた「丸のみカード」を色ごとに数え、多い色のプレイヤーが丸の総数を得点します。同数の場合は不成立となり、誰も得点せず、その多角形は二度と得点できません。
 
 - 手札は5枚。1枚置いたら自分の山札から1枚引く。
+- カードは、すでに置かれたカードと辺または角で接する空きマスに置く(モード選択で「辺のみ」の変則ルールも選べる)。
 - 山札は各色24枚: ななめ線×8、V字線×8、十字線×4、丸のみ×4。
 - 置く前の回転は自由。
 - 一度得点した線も、別の多角形の辺として再利用できる。
@@ -74,7 +76,7 @@ Tap a card in your hand to select it, tap it again (or the Rotate button, or the
 
 ### GitHub Pagesでの公開
 
-[Neurons Board Game](https://eijwat.github.io/neurons_boardgame/)
+`index.html` をリポジトリのルートに置き、リポジトリ設定でPagesを有効化(ブランチからのデプロイ)すれば公開完了です。
 
 ---
 
