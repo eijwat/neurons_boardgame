@@ -157,6 +157,10 @@ button.flat:active { transform: translateY(1px); }
 }
 #mode-card h2 { font-size: 20px; margin-bottom: 16px; }
 #mode-card .flat { font-size: 14px; margin: 0 6px; padding: 10px 18px; }
+#place-opt { margin-bottom: 16px; }
+#place-label { font-size: 12px; opacity: .75; margin-bottom: 6px; }
+#mode-card .flat.opt { font-size: 12px; padding: 6px 12px; border: 2px solid transparent; }
+#mode-card .flat.opt.sel { border-color: var(--fire-deep); }
 
 @media (max-width: 420px) {
   .title-card .word { font-size: 18px; }
@@ -205,7 +209,7 @@ button.flat:active { transform: translateY(1px); }
       <p>白(あなた)と黒(CPU)に分かれて、ニューロンのネットワークを育てます。線が閉じて多角形(サーキット)ができたら発火、得点です。</p>
       <h3>手番</h3>
       <ol>
-        <li>手札から1枚を、すでに置かれたカードと辺で接する空きマスに置く(最初の1枚は中央)。回転は自由。</li>
+        <li>手札から1枚を、すでに置かれたカードと辺で接する空きマスに置く(最初の1枚は中央)。回転は自由。モード選択で「斜めもあり」を選ぶと、角だけが接するマスにも置ける。</li>
         <li>置けるのは自分の色の丸のカードだけ。置いたら自分の山札から1枚引く。</li>
       </ol>
       <h3>接続とサーキット</h3>
@@ -229,7 +233,7 @@ button.flat:active { transform: translateY(1px); }
       <p>White (you) versus Black (CPU): grow a network of neurons. When lines close into a polygon, the circuit fires and someone scores.</p>
       <h3>Your turn</h3>
       <ol>
-        <li>Place one card from your hand on an empty cell that shares an edge with a placed card (the first card goes in the center). Rotate freely.</li>
+        <li>Place one card from your hand on an empty cell that shares an edge with a placed card (the first card goes in the center). Rotate freely. With “Diagonals too” selected, cells touching only at a corner are also legal.</li>
         <li>You may only place cards with circles of your own color. After placing, draw one card from your deck.</li>
       </ol>
       <h3>Connections and circuits</h3>
@@ -255,6 +259,11 @@ button.flat:active { transform: translateY(1px); }
 <div class="modal-bg hidden" id="mode-modal">
   <div id="mode-card">
     <h2 id="mode-title"></h2>
+    <div id="place-opt">
+      <div id="place-label"></div>
+      <button class="flat opt sel" id="btn-place-edge"></button>
+      <button class="flat opt" id="btn-place-diag"></button>
+    </div>
     <div>
       <button class="flat" id="btn-mode-cpu"></button>
       <button class="flat" id="btn-mode-2p"></button>
@@ -300,7 +309,7 @@ function cardEdges(type, orient, x, y) {
 function orientCount(type) { return type === 'diag' ? 2 : type === 'vee' ? 4 : 1; }
 
 class Board {
-  constructor() { this.cells = new Map(); this.scoredFaces = new Set(); }
+  constructor() { this.cells = new Map(); this.scoredFaces = new Set(); this.diag = false; }
   key(x, y) { return x + ',' + y; }
   get(x, y) { return this.cells.get(this.key(x, y)); }
   place(x, y, type, orient, color) { this.cells.set(this.key(x, y), { type, orient, color, x, y }); }
@@ -310,8 +319,11 @@ class Board {
     const out = [];
     if (this.isEmpty()) return [{ x: bounds.cx, y: bounds.cy }];
     const seen = new Set();
+    const dirs = this.diag
+      ? [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]
+      : [[1,0],[-1,0],[0,1],[0,-1]];
     for (const c of this.cells.values()) {
-      for (const d of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      for (const d of dirs) {
         const nx = c.x + d[0], ny = c.y + d[1];
         const k = this.key(nx, ny);
         if (this.cells.has(k) || seen.has(k)) continue;
@@ -562,7 +574,8 @@ const I18N = {
     modeCpu: 'CPU戦', mode2p: '2人対戦',
     turnOfWhite: '白の番です', turnOfBlack: '黒の番です',
     winnerWhite: '白の勝ち!', winnerBlack: '黒の勝ち!',
-    deckInfo2p: (w, b) => '山札 白:' + w + ' / 黒:' + b
+    deckInfo2p: (w, b) => '山札 白:' + w + ' / 黒:' + b,
+    placeLabel: '配置ルール', placeEdge: '辺のみ', placeDiag: '斜めもあり'
   },
   en: {
     you: 'You', rules: 'Rules', newgame: 'New', rotate: 'Rotate ⟳', close: 'Close',
@@ -584,7 +597,8 @@ const I18N = {
     modeCpu: 'vs CPU', mode2p: '2 players',
     turnOfWhite: "White's turn", turnOfBlack: "Black's turn",
     winnerWhite: 'White wins!', winnerBlack: 'Black wins!',
-    deckInfo2p: (w, b) => 'Deck W:' + w + ' / B:' + b
+    deckInfo2p: (w, b) => 'Deck W:' + w + ' / B:' + b,
+    placeLabel: 'Placement', placeEdge: 'Edges only', placeDiag: 'Diagonals too'
   }
 };
 let lang = (navigator.language || 'ja').toLowerCase().indexOf('ja') === 0 ? 'ja' : 'en';
@@ -596,6 +610,7 @@ const CELL = 56;
 const SVGNS = 'http://www.w3.org/2000/svg';
 
 let mode = 'cpu';
+let diagPlacement = false;
 let board, decks, hands, scores, turn, selIdx, selOrient, gameOver, busy;
 let lastStatus = { key: 'statusStart', args: [], thinking: false };
 let lastResult = null;
@@ -604,6 +619,7 @@ function humanColor() { return mode === '2p' ? turn : 'white'; }
 
 function newGame() {
   board = new Board();
+  board.diag = diagPlacement;
   decks = { white: makeDeck('white'), black: makeDeck('black') };
   hands = { white: decks.white.splice(0, 5), black: decks.black.splice(0, 5) };
   scores = { white: 0, black: 0 };
@@ -924,6 +940,9 @@ function applyLang() {
   document.getElementById('mode-title').textContent = T().chooseMode;
   document.getElementById('btn-mode-cpu').textContent = T().modeCpu;
   document.getElementById('btn-mode-2p').textContent = T().mode2p;
+  document.getElementById('place-label').textContent = T().placeLabel;
+  document.getElementById('btn-place-edge').textContent = T().placeEdge;
+  document.getElementById('btn-place-diag').textContent = T().placeDiag;
   document.getElementById('rules-ja').classList.toggle('hidden', lang !== 'ja');
   document.getElementById('rules-en').classList.toggle('hidden', lang !== 'en');
   if (board) {
@@ -960,6 +979,13 @@ document.getElementById('rules-modal').addEventListener('click', e => {
 document.getElementById('btn-new').addEventListener('click', () => {
   document.getElementById('mode-modal').classList.remove('hidden');
 });
+function setPlacement(diag) {
+  diagPlacement = diag;
+  document.getElementById('btn-place-edge').classList.toggle('sel', !diag);
+  document.getElementById('btn-place-diag').classList.toggle('sel', diag);
+}
+document.getElementById('btn-place-edge').addEventListener('click', () => setPlacement(false));
+document.getElementById('btn-place-diag').addEventListener('click', () => setPlacement(true));
 document.getElementById('btn-mode-cpu').addEventListener('click', () => {
   mode = 'cpu';
   document.getElementById('mode-modal').classList.add('hidden');
