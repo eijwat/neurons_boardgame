@@ -22,6 +22,7 @@ When lines close into a polygon, the circuit fires. Count the circles on the cir
 
 - Hand of 5 cards. Place one, draw one, from your own deck.
 - Cards go on empty cells that touch a placed card by an edge or a corner (an edge-only variant is available in the mode selector).
+- The board is 13×13 cells; a dashed frame marks the boundary when play approaches it.
 - Each deck (24 cards per color): diagonal ×8, V-line ×8, cross ×4, circle only ×4.
 - Cards may be rotated freely before placing.
 - Lines that already scored can be reused as edges of a new, different polygon.
@@ -58,6 +59,7 @@ Tap a card in your hand to select it, tap it again (or the Rotate button, or the
 
 - 手札は5枚。1枚置いたら自分の山札から1枚引く。
 - カードは、すでに置かれたカードと辺または角で接する空きマスに置く(モード選択で「辺のみ」の変則ルールも選べる)。
+- 盤面は13×13マス。端に近づくと境界の点線が表示される。
 - 山札は各色24枚: ななめ線×8、V字線×8、十字線×4、丸のみ×4。
 - 置く前の回転は自由。
 - 一度得点した線も、別の多角形の辺として再利用できる。
