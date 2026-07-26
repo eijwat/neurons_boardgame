@@ -211,7 +211,6 @@ button.flat:active { transform: translateY(1px); }
       <ol>
         <li>手札から1枚を、すでに置かれたカードと辺または角で接する空きマスに置く(最初の1枚は中央)。回転は自由。モード選択で「辺のみ」を選ぶと、辺で接するマスに限定される。</li>
         <li>置けるのは自分の色の丸のカードだけ。置いたら自分の山札から1枚引く。</li>
-        <li>盤面は13×13マス。端に近づくと境界が点線で表示され、その外には置けない。</li>
       </ol>
       <h3>接続とサーキット</h3>
       <ol>
@@ -236,7 +235,6 @@ button.flat:active { transform: translateY(1px); }
       <ol>
         <li>Place one card from your hand on an empty cell that touches a placed card by an edge or a corner (the first card goes in the center). Rotate freely. With “Edges only” selected, placement is restricted to edge-adjacent cells.</li>
         <li>You may only place cards with circles of your own color. After placing, draw one card from your deck.</li>
-        <li>The board is 13×13 cells. A dashed frame appears as play approaches the edge; nothing can be placed outside it.</li>
       </ol>
       <h3>Connections and circuits</h3>
       <ol>
@@ -607,7 +605,7 @@ let lang = (navigator.language || 'ja').toLowerCase().indexOf('ja') === 0 ? 'ja'
 function T() { return I18N[lang]; }
 
 /* ================= game state ================= */
-const BOUNDS = { w: 13, h: 13, cx: 6, cy: 6 };
+const BOUNDS = { w: 11, h: 11, cx: 5, cy: 5 };
 const CELL = 56;
 const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -671,8 +669,6 @@ function renderBoard() {
   svg.innerHTML = '';
   const vb = computeViewBox();
   svg.setAttribute('viewBox', vb.join(' '));
-  svg.appendChild(el('rect', { x: 0, y: 0, width: BOUNDS.w * CELL, height: BOUNDS.h * CELL,
-    fill: 'none', stroke: 'rgba(43,43,51,.35)', 'stroke-width': 2, 'stroke-dasharray': '8 6', rx: 8 }));
   for (const c of board.cells.values()) {
     const g = el('g', {});
     g.appendChild(el('rect', { x: px(c.x) + 1.5, y: px(c.y) + 1.5, width: CELL - 3, height: CELL - 3, rx: 4, class: 'card-face' }));
