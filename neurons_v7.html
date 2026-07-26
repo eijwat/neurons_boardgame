@@ -496,159 +496,63 @@ function makeDeck(color) {
   }
   return deck;
 }
-// ---- AI ----
-// Union-find over the current graph: a prospective line card can close a circuit
-// iff two of its corner endpoints are already connected (all its edges pass
-// through its own fresh center node).
-function buildUF(board) {
-  const parent = new Map();
-  const find = (x) => {
-    let r = x;
-    while (parent.get(r) !== r) r = parent.get(r);
-    let cur = x;
-    while (parent.get(cur) !== cur) { const n = parent.get(cur); parent.set(cur, r); cur = n; }
-    return r;
-  };
-  const add = (n) => { if (!parent.has(n)) parent.set(n, n); };
-  for (const c of board.cells.values()) {
-    for (const e of cardEdges(c.type, c.orient, c.x, c.y)) {
-      add(e[0]); add(e[1]);
-      const ra = find(e[0]), rb = find(e[1]);
-      if (ra !== rb) parent.set(ra, rb);
-    }
-  }
-  return {
-    has: (n) => parent.has(n),
-    connected: (a, b) => parent.has(a) && parent.has(b) && find(a) === find(b)
-  };
-}
-function canCloseCircuit(uf, type, orient, x, y) {
-  if (type === 'dot') return false;
-  const edges = cardEdges(type, orient, x, y);
-  const corners = [];
-  for (const e of edges) for (const n of e) if (n[0] === 'C' && corners.indexOf(n) < 0) corners.push(n);
-  for (let i = 0; i < corners.length; i++)
-    for (let j = i + 1; j < corners.length; j++)
-      if (uf.connected(corners[i], corners[j])) return true;
-  return false;
-}
-// Exact simulation of one placement; returns points gained by `color` and by the opponent.
-function simPlacement(board, x, y, type, orient, color) {
-  board.place(x, y, type, orient, color);
-  const saved = board.scoredFaces;
-  board.scoredFaces = new Set(saved);
-  const events = resolvePlacement(board, color);
-  const newScored = board.scoredFaces;
-  board.scoredFaces = saved;
-  board.unplace(x, y);
-  let gain = 0, loss = 0;
-  for (const e of events) {
-    if (!e.winner) continue;
-    if (e.winner === color) gain += e.points; else loss += e.points;
-  }
-  return { gain, loss, newScored };
-}
-const LINE_VARIANTS = [['diag',0],['diag',1],['vee',0],['vee',1],['vee',2],['vee',3],['cross',0]];
-// Best immediate score `who` could take on this board (UF-filtered scan).
-function bestReply(board, bounds, who) {
-  const uf = buildUF(board);
-  const cells = board.legalCells(bounds);
-  let best = 0;
-  for (const tv of LINE_VARIANTS) {
-    for (const cell of cells) {
-      if (!canCloseCircuit(uf, tv[0], tv[1], cell.x, cell.y)) continue;
-      const r = simPlacement(board, cell.x, cell.y, tv[0], tv[1], who);
-      const net = r.gain - r.loss * 0.5;
-      if (net > best) best = net;
-    }
-  }
-  return best;
-}
-// Own follow-up threats using the actual remaining hand types.
-// Returns [best, secondBestFromDifferentCell].
-function ownThreats(board, bounds, who, types) {
-  const uf = buildUF(board);
-  const cells = board.legalCells(bounds);
-  let best = 0, bestCell = null, second = 0;
-  for (const t of types) {
-    if (t === 'dot') continue;
-    for (let o = 0; o < orientCount(t); o++) {
-      for (const cell of cells) {
-        if (!canCloseCircuit(uf, t, o, cell.x, cell.y)) continue;
-        const r = simPlacement(board, cell.x, cell.y, t, o, who);
-        const net = r.gain - r.loss;
-        if (net > best) {
-          if (bestCell && (bestCell.x !== cell.x || bestCell.y !== cell.y)) second = best;
-          best = net; bestCell = cell;
-        } else if (net > second && bestCell && (bestCell.x !== cell.x || bestCell.y !== cell.y)) {
-          second = net;
-        }
-      }
-    }
-  }
-  return [best, second];
-}
 function aiChooseMove(board, hand, color, bounds) {
-  const oppColor = color === 'white' ? 'black' : 'white';
   const cells = board.legalCells(bounds);
-  const uf = buildUF(board);
-  const handTypes = [...new Set(hand.map(h => h.type))];
+  const oppColor = color === 'white' ? 'black' : 'white';
   const candidates = [];
-  for (const type of handTypes) {
-    for (let o = 0; o < orientCount(type); o++) {
+  const handTypes = new Set();
+  for (let hi = 0; hi < hand.length; hi++) {
+    const card = hand[hi];
+    if (handTypes.has(card.type)) continue;
+    handTypes.add(card.type);
+    for (let o = 0; o < orientCount(card.type); o++) {
       for (const cell of cells) {
+        board.place(cell.x, cell.y, card.type, o, color);
+        const savedScored = board.scoredFaces;
+        board.scoredFaces = new Set(savedScored);
+        const events = resolvePlacement(board, color);
         let gain = 0, loss = 0;
-        if (canCloseCircuit(uf, type, o, cell.x, cell.y)) {
-          const r = simPlacement(board, cell.x, cell.y, type, o, color);
-          gain = r.gain; loss = r.loss;
-        }
-        // positional heuristics
-        let pos = 0;
-        let ownN = 0, oppN = 0, occ = 0;
-        for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
-          if (!dx && !dy) continue;
-          const n = board.get(cell.x + dx, cell.y + dy);
-          if (n) { occ++; if (n.color === color) ownN++; else oppN++; }
-        }
-        if (type === 'dot') {
-          // a dot wants to sit where circuits may enclose it, ideally amid enemy lines
-          pos = occ * 0.15 + oppN * 0.35 + ownN * 0.1;
-        } else {
-          let conn = 0;
-          const cs = new Set();
-          for (const e of cardEdges(type, o, cell.x, cell.y))
-            for (const n of e) if (n[0] === 'C') cs.add(n);
-          for (const n of cs) if (uf.has(n)) conn++;
-          pos = conn * 0.5 + ownN * 0.2 + oppN * 0.1;
-        }
-        candidates.push({ type, orient: o, cell, gain, loss, pos });
+        for (const e of events) { if (e.winner === color) gain += e.points; else loss += e.points; }
+        candidates.push({ type: card.type, orient: o, cell, gain, loss, newScored: board.scoredFaces });
+        board.scoredFaces = savedScored;
+        board.unplace(cell.x, cell.y);
       }
     }
   }
-  for (const c of candidates) c.v = c.gain * 10 - c.loss * 10 + c.pos + Math.random() * 0.3;
-  candidates.sort((a, b) => b.v - a.v);
-  const K = Math.min(20, candidates.length);
-  let best = null;
-  for (let i = 0; i < K; i++) {
-    const c = candidates[i];
-    const sim = simPlacement(board, c.cell.x, c.cell.y, c.type, c.orient, color);
+  for (const c of candidates) c.value = c.gain * 10 - c.loss * 10 + Math.random() * 0.5;
+  candidates.sort((a, b) => b.value - a.value);
+  const top = candidates.slice(0, 8);
+  const genericTypes = [['diag',0],['diag',1],['vee',0],['vee',1],['vee',2],['vee',3],['cross',0]];
+  for (const c of top) {
     board.place(c.cell.x, c.cell.y, c.type, c.orient, color);
     const savedScored = board.scoredFaces;
-    board.scoredFaces = sim.newScored;
-    const oppBest = bestReply(board, bounds, oppColor);
-    const remaining = hand.slice();
-    remaining.splice(remaining.findIndex(h => h.type === c.type), 1);
-    const th = ownThreats(board, bounds, color, [...new Set(remaining.map(h => h.type))]);
+    board.scoredFaces = c.newScored;
+    let oppBest = 0;
+    const oppCells = board.legalCells(bounds);
+    for (const t of genericTypes) {
+      for (const cell of oppCells) {
+        board.place(cell.x, cell.y, t[0], t[1], oppColor);
+        const s2 = board.scoredFaces;
+        board.scoredFaces = new Set(s2);
+        const events = resolvePlacement(board, oppColor);
+        let g = 0;
+        for (const e of events) if (e.winner === oppColor) g += e.points;
+        if (g > oppBest) oppBest = g;
+        board.scoredFaces = s2;
+        board.unplace(cell.x, cell.y);
+      }
+    }
     board.scoredFaces = savedScored;
     board.unplace(c.cell.x, c.cell.y);
-    c.v2 = c.gain * 10 - c.loss * 10 - oppBest * 7 + th[0] * 2.5 + th[1] * 1.5 + c.pos + Math.random() * 0.3;
-    if (!best || c.v2 > best.v2) best = c;
+    c.value = c.gain * 10 - c.loss * 10 - oppBest * 6 + Math.random() * 0.5;
   }
-  if (!best) best = candidates[0];
+  top.sort((a, b) => b.value - a.value);
+  const best = top[0] || candidates[0];
   if (!best) return null;
   const hi = hand.findIndex(h => h.type === best.type);
   return { hi, type: best.type, orient: best.orient, cell: best.cell };
 }
+
 
 /* ================= i18n ================= */
 const I18N = {
