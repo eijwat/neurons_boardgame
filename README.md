@@ -36,7 +36,7 @@ Tap a card in your hand to select it, tap it again (or the Rotate button, or the
 ### Under the hood
 
 - Circuit detection is planar face enumeration on the graph formed by all placed lines (half-edge traversal with angular sorting), so simultaneous and nested circuit completions are handled correctly.
-- The CPU evaluates every legal placement of every hand card, then reads one ply ahead on its top candidates to avoid handing you a big circuit.
+- The CPU evaluates every legal placement of every hand card, using a union-find pre-filter so exact circuit scoring runs only where a circuit can actually close. Its top candidates are then scored two-sided: the opponent's best reply is subtracted, and the CPU's own follow-up threats (including unstoppable double threats) are added.
 - Everything lives in one HTML file: no frameworks, no external assets.
 
 ### Hosting on GitHub Pages
@@ -73,7 +73,7 @@ Tap a card in your hand to select it, tap it again (or the Rotate button, or the
 ### 実装メモ
 
 - 回路検出は、置かれた全ての線が作るグラフに対する平面グラフの面列挙(角度ソートによる半辺トレース)で行っています。同時完成や入れ子のサーキットも正しく処理されます。
-- CPUは手札全カードの全配置候補を評価し、上位候補については相手の最善応手まで1手先読みします。
+- CPUは手札全カードの全配置候補を評価します。Union-Findによる事前判定で回路が閉じ得る手だけを厳密計算し、上位候補については相手の最善応手を差し引き、自分の次手の脅し(防ぎきれない二重の脅しを含む)を加点する両面評価を行います。
 - フレームワークも外部アセットも使わない、単一HTMLファイル構成です。
 
 ### GitHub Pagesでの公開
