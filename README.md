@@ -83,4 +83,8 @@ Tap a card in your hand to select it, tap it again (or the Rotate button, or the
 
 ---
 
-Game design: Eiji Watanabe / Implementation: Claude Fable5 (Anthropic) / All Rights Reserved 2026-
+Game design: Eiji Watanabe
+
+Implementation: Claude Fable5 (Anthropic)
+
+All Rights Reserved 2026-
