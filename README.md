@@ -1,4 +1,4 @@
-# The NEURONS
+# The NEURONS boardgame
 
 *[English](#english) | [日本語](#日本語)*
 
@@ -83,4 +83,4 @@ Tap a card in your hand to select it, tap it again (or the Rotate button, or the
 
 ---
 
-Game design: Eiji Watanabe / Implementation assistance: Claude (Anthropic)
+Game design: Eiji Watanabe / Implementation: Claude Fable5 (Anthropic) / All Rights Reserved 2026-
