@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# scratch output from selforg_engine/render_all.js
+selforg_engine/.frames/
+
+# rendered movies: 260 MB of binaries that git would keep forever, and they are
+# regenerated deterministically in about two minutes with
+#   cd selforg_engine && node render_all.js
+selforg_movies/*/*.mp4

@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>NEURONS — self-organisation</title>
+<style>
+:root{
+  --paper:#fdfbf4; --ink:#2b2723; --paper-shadow:rgba(0,0,0,.18);
+  --bg:#0a0a0e; --panel:rgba(16,16,22,.86); --panel-b:rgba(255,255,255,.13);
+  --fg:#e8e6e1; --dim:#9a978f; --warm:#ffc450; --cool:#56aaff; --dmg:#ff28be;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;color:var(--fg)}
+#stage{position:fixed;inset:0}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair;touch-action:none}
+body.paper{--bg:var(--paper);--fg:var(--ink);--panel:rgba(253,251,244,.9);--panel-b:rgba(0,0,0,.14);--dim:#6c665e}
+
+/* ---- panels ---- */
+.panel{position:absolute;background:var(--panel);border:1px solid var(--panel-b);border-radius:12px;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:12px 14px;font-size:13px;
+  box-shadow:0 6px 26px rgba(0,0,0,.34)}
+#hud{top:14px;left:14px;min-width:310px;max-width:min(360px,calc(100vw - 28px));max-height:calc(100vh - 28px);overflow-y:auto}
+#readout{top:14px;right:14px;min-width:190px;text-align:right;font-variant-numeric:tabular-nums}
+#plot{bottom:14px;left:14px;right:14px;height:96px;padding:8px 10px}
+#plotc{width:100%;height:100%;display:block}
+#help{inset:auto 14px 122px 14px;max-width:640px;margin:0 auto;display:none;line-height:1.65}
+#help.on{display:block}
+
+h1{margin:0 0 2px;font-size:15px;font-weight:650;letter-spacing:.02em}
+.sub{color:var(--dim);font-size:11.5px;margin-bottom:10px;line-height:1.45}
+.row{display:flex;align-items:center;gap:8px;margin:7px 0}
+.row label{flex:0 0 92px;color:var(--dim);font-size:11.5px}
+.row output{flex:0 0 52px;text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px}
+input[type=range]{flex:1;min-width:0;accent-color:var(--warm);height:18px}
+.knobrow input[type=range]{accent-color:#ff7a3d;height:26px}
+.knobrow label{font-size:12.5px;color:var(--fg);font-weight:600}
+
+button{font:inherit;font-size:12px;color:var(--fg);background:transparent;border:1px solid var(--panel-b);
+  border-radius:999px;padding:4px 11px;cursor:pointer;transition:background .12s,border-color .12s}
+button:hover{background:rgba(255,255,255,.09)}
+body.paper button:hover{background:rgba(0,0,0,.06)}
+button.on{background:var(--warm);border-color:var(--warm);color:#1a1408;font-weight:600}
+.btns{display:flex;flex-wrap:wrap;gap:5px;margin:7px 0}
+.act{font-size:10.5px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase;margin:12px 0 4px}
+details{margin-top:10px}
+summary{cursor:pointer;color:var(--dim);font-size:11.5px;list-style:none;user-select:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸ ";display:inline-block;transition:transform .15s}
+details[open] summary::before{content:"▾ "}
+.big{font-size:20px;font-weight:650;letter-spacing:-.01em}
+.lbl{color:var(--dim);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase}
+.phase{font-size:13px;font-weight:600;margin-top:5px}
+.ordered{color:var(--cool)} .chaotic{color:var(--dmg)} .dead{color:var(--dim)}
+kbd{font:inherit;font-size:11px;border:1px solid var(--panel-b);border-radius:4px;padding:0 5px;color:var(--dim)}
+#busy{position:absolute;inset:0;display:none;place-items:center;background:rgba(0,0,0,.55);font-size:14px;z-index:5}
+#busy.on{display:grid}
+@media (max-width:760px){ #plot{display:none} #hud{font-size:12px} }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="view"></canvas>
+  <div id="busy"><span id="busytx">generating…</span></div>
+
+  <div class="panel" id="hud">
+    <h1 id="t-title">NEURONS — 自己組織化</h1>
+    <div class="sub" id="t-sub"></div>
+
+    <div class="row knobrow">
+      <label id="t-knob">主ノブ</label>
+      <input type="range" id="knob" min="0" max="1000" value="620">
+      <output id="knobv"></output>
+    </div>
+
+    <div class="row">
+      <label id="t-speed">速度</label>
+      <input type="range" id="sSp" min="0" max="17" step="1" value="10">
+      <output id="oSp"></output>
+    </div>
+    <div class="btns" style="margin:-2px 0 4px"><button id="bauto"></button><span class="sub" id="rPace" style="margin:0;align-self:center"></span></div>
+
+    <div class="act" id="t-act1">第1幕 — 印刷されたデッキ</div>
+    <div class="btns" id="pre1"></div>
+    <div class="act" id="t-act2">第2幕 — 交差の多いデッキ</div>
+    <div class="btns" id="pre2"></div>
+
+    <div class="btns" style="margin-top:12px">
+      <button id="bplay"></button>
+      <button id="bregen"></button>
+      <button id="bfeed"></button>
+      <button id="bdmg"></button>
+      <button id="bnew"></button>
+      <button id="bkiosk"></button>
+      <button id="blang">EN</button>
+      <button id="bhelp">?</button>
+    </div>
+
+    <details id="adv">
+      <summary id="t-adv">詳細パラメータ</summary>
+      <div class="act" id="t-dyn">力学(即時)</div>
+      <div class="row"><label id="t-R"></label><input type="range" id="sR" min="2" max="40" step="2" value="20"><output id="oR"></output></div>
+      <div class="row"><label id="t-faceA"></label><input type="range" id="sFA" min="0" max="4" step="0.05" value="0"><output id="oFA"></output></div>
+      <div class="row"><label id="t-faceDur"></label><input type="range" id="sFD" min="2" max="60" step="2" value="24"><output id="oFD"></output></div>
+      <div class="row"><label id="t-g"></label><input type="range" id="sG" min="0" max="4" step="0.1" value="0"><output id="oG"></output></div>
+      <div class="act" id="t-wire">配線(再生成)</div>
+      <div class="row"><label id="t-q"></label><input type="range" id="sQ" min="0.4" max="0.99" step="0.005" value="0.8"><output id="oQ"></output></div>
+      <div class="row"><label id="t-cross"></label><input type="range" id="sC" min="0" max="0.9" step="0.005" value="0.6"><output id="oC"></output></div>
+      <div class="row"><label id="t-dot"></label><input type="range" id="sD" min="0" max="0.45" step="0.005" value="0.167"><output id="oD"></output></div>
+      <div class="row"><label id="t-S"></label><input type="range" id="sS" min="0" max="1" step="0.1" value="0"><output id="oS"></output></div>
+      <div class="row"><label id="t-p"></label><input type="range" id="sP" min="0.2" max="1" step="0.05" value="1"><output id="oP"></output></div>
+      <div class="row"><label id="t-cs"></label><input type="range" id="sCS" min="4" max="14" step="1" value="6"><output id="oCS"></output></div>
+      <div class="btns"><button id="btorus"></button><button id="bview"></button></div>
+    </details>
+  </div>
+
+  <div class="panel" id="readout">
+    <div class="lbl" id="t-act">活動</div>
+    <div class="big" id="rAct">—</div>
+    <div class="lbl" style="margin-top:8px" id="t-locked">位相ロック</div>
+    <div class="big" id="rLock">—</div>
+    <div class="sub" style="margin:2px 0 0" id="rPer"></div>
+    <div class="lbl" style="margin-top:8px" id="t-order">秩序</div>
+    <div class="phase" id="rPhase">—</div>
+    <div class="sub" style="margin:2px 0 0" id="rTally"></div>
+    <div class="lbl" style="margin-top:8px" id="t-circ">発火した回路</div>
+    <div class="big" id="rCirc">—</div>
+    <div class="sub" style="margin:8px 0 0" id="rWire"></div>
+  </div>
+
+  <div class="panel" id="plot"><canvas id="plotc"></canvas></div>
+  <div class="panel" id="help"></div>
+</div>
+
+<script>
+"use strict";
+/* ===========================================================================
+   NEURONS board game -> excitable medium.  Single file, no dependencies.
+   The engine below is a direct port of the headless engine validated against
+   index.html (edge counts, planar face enumeration and face colour balance all
+   match the game's own implementation exactly).
+   =========================================================================== */
+
+/* ------------------------------------------------------------------ RNG */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+/* ------------------------------------------------------- card geometry */
+// corner slots: 0=TL 1=TR 2=BL 3=BR
+const SLOT_D=[[-.5,-.5],[.5,-.5],[-.5,.5],[.5,.5]];   // centre -> corner
+const SLOT_OFF=[[0,0],[1,0],[0,1],[1,1]];             // cell (x,y) -> corner coord
+const DIAG=0,VEE=1,CROSS=2,DOT=3,EMPTY=4;
+const ORIENTS=[2,4,1,1];
+function cardSlots(t,o){
+  switch(t){
+    case DIAG: return o%2===0?[0,3]:[1,2];
+    case VEE:{const k=((o%4)+4)%4; return k===0?[0,1]:k===1?[1,3]:k===2?[2,3]:[0,2];}
+    case CROSS: return [0,1,2,3];
+    default: return [];
+  }
+}
+
+/* ------------------------------------------------------------ wiring */
+function generateWiring(opt){
+  const W=opt.W,H=opt.H,torus=!!opt.torus,rng=mulberry32(opt.seed>>>0);
+  const NC=W*H, cw=torus?W:W+1, ch=torus?H:H+1, NK=cw*ch, N=NC+NK;
+  const cornerIdx = torus
+    ? (cx,cy)=>NC+(((cx%W)+W)%W)+(((cy%H)+H)%H)*W
+    : (cx,cy)=>NC+cx+cy*cw;
+  const type=new Uint8Array(NC).fill(EMPTY), orient=new Uint8Array(NC), color=new Uint8Array(NC).fill(255);
+
+  // deck mix; the printed deck is dot = cross = 1/6, the rest split evenly diag:vee
+  const d=opt.dot, cf=opt.cross, rest=Math.max(0,1-d-cf);
+  const cum=[rest/2,rest,rest+cf,1];
+  const drawType=()=>{const r=rng();for(let i=0;i<4;i++) if(r<cum[i]) return i;return DOT;};
+
+  // union-find over corners, for "does this card close a circuit"
+  const par=new Int32Array(NK); for(let i=0;i<NK;i++) par[i]=i;
+  const find=(x)=>{while(par[x]!==x){par[x]=par[par[x]];x=par[x];}return x;};
+  const uni=(a,b)=>{a=find(a);b=find(b);if(a!==b)par[a]=b;};
+  const live=new Uint8Array(NK);
+
+  const arr=[],pos=new Map();
+  const fAdd=(v)=>{if(!pos.has(v)){pos.set(v,arr.length);arr.push(v);}};
+  const fDel=(v)=>{const i=pos.get(v);if(i===undefined)return;const last=arr.pop();pos.delete(v);
+    if(i<arr.length){arr[i]=last;pos.set(last,i);}};
+  const fPick=()=>arr[(rng()*arr.length)|0];
+
+  const nb=opt.edgeOnly?[[1,0],[-1,0],[0,1],[0,-1]]
+    :[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+  const ok=(x,y)=>torus||(x>=0&&y>=0&&x<W&&y<H);
+  const addF=(x,y)=>{for(const dd of nb){let nx=x+dd[0],ny=y+dd[1];if(!ok(nx,ny))continue;
+    if(torus){nx=((nx%W)+W)%W;ny=((ny%H)+H)%H;} const k=nx+ny*W; if(type[k]===EMPTY) fAdd(k);}};
+  const slotC=(x,y,t,o)=>cardSlots(t,o).map(s=>cornerIdx(x+SLOT_OFF[s][0],y+SLOT_OFF[s][1]));
+  const closes=(cs)=>{for(let i=0;i<cs.length;i++)for(let j=i+1;j<cs.length;j++)
+    if(find(cs[i]-NC)===find(cs[j]-NC))return true;return false;};
+  const place=(k,t,o,c)=>{const x=k%W,y=(k/W)|0;type[k]=t;orient[k]=o;color[k]=c;
+    const cs=slotC(x,y,t,o);
+    for(let i=0;i<cs.length;i++){live[cs[i]-NC]=1;if(i)uni(cs[0]-NC,cs[i]-NC);}
+    fDel(k);addF(x,y);};
+
+  place(((W/2)|0)+((H/2)|0)*W, drawType(), (rng()*4)|0, rng()<opt.q?0:1);
+  const target=Math.max(1,Math.round(opt.p*NC)), S=opt.S;
+  let placed=1;
+  while(placed<target&&arr.length>0){
+    const col=rng()<opt.q?0:1;
+    const hand=[drawType(),drawType(),drawType(),drawType(),drawType()];
+    let bk=-1,bt=0,bo=0;
+    if(S>0&&rng()<S){                       // greedy: play for circuits, and for your own colour
+      let best=-Infinity;
+      for(let s=0;s<20;s++){
+        const k=fPick(), t=hand[(rng()*5)|0], o=(rng()*ORIENTS[t])|0;
+        const x=k%W,y=(k/W)|0; let sc=0;
+        if(t!==DOT){const cs=slotC(x,y,t,o); if(closes(cs))sc+=10;
+          for(const c of cs) if(live[c-NC]) sc+=1;}
+        for(const dd of nb){let nx=x+dd[0],ny=y+dd[1];if(!ok(nx,ny))continue;
+          if(torus){nx=((nx%W)+W)%W;ny=((ny%H)+H)%H;}
+          const kk=nx+ny*W; if(type[kk]!==EMPTY&&color[kk]===col) sc+=.3;}
+        sc+=rng()*.01;
+        if(sc>best){best=sc;bk=k;bt=t;bo=o;}
+      }
+    } else { bk=fPick(); bt=hand[0]; bo=(rng()*ORIENTS[bt])|0; }
+    place(bk,bt,bo,col); placed++;
+  }
+  return {W,H,torus,NC,NK,N,cw,ch,type,orient,color,cornerIdx,placed};
+}
+
+/* ------------------------------------------------- graph (CSR, angular) */
+function buildGraph(w){
+  const {W,H,N}=w, deg=new Int32Array(N), el=[];
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const k=x+y*W,t=w.type[k]; if(t===EMPTY||t===DOT)continue;
+    for(const s of cardSlots(t,w.orient[k])){
+      const c=w.cornerIdx(x+SLOT_OFF[s][0],y+SLOT_OFF[s][1]);
+      el.push([k,c,SLOT_D[s][0],SLOT_D[s][1]]); deg[k]++; deg[c]++;
+    }
+  }
+  const start=new Int32Array(N+1);
+  for(let i=0;i<N;i++) start[i+1]=start[i]+deg[i];
+  const E2=start[N], nbr=new Int32Array(E2), dx=new Float32Array(E2), dy=new Float32Array(E2);
+  const fill=start.slice(0,N);
+  for(const e of el){
+    let i=fill[e[0]]++; nbr[i]=e[1]; dx[i]=e[2];  dy[i]=e[3];
+    i=fill[e[1]]++;     nbr[i]=e[0]; dx[i]=-e[2]; dy[i]=-e[3];
+  }
+  for(let v=0;v<N;v++){
+    const a=start[v],b=start[v+1],n=b-a; if(n<2)continue;
+    const ix=[]; for(let i=a;i<b;i++) ix.push({n:nbr[i],x:dx[i],y:dy[i],ang:Math.atan2(dy[i],dx[i])});
+    ix.sort((p,q)=>p.ang-q.ang);
+    for(let i=0;i<n;i++){nbr[a+i]=ix[i].n;dx[a+i]=ix[i].x;dy[a+i]=ix[i].y;}
+  }
+  const revpos=new Int32Array(E2).fill(-1);
+  for(let v=0;v<N;v++)for(let i=start[v];i<start[v+1];i++){
+    const u=nbr[i];
+    for(let j=start[u];j<start[u+1];j++) if(nbr[j]===v){revpos[i]=j;break;}
+  }
+  return {start,nbr,dx,dy,revpos,E:E2/2};
+}
+
+/* ------------------------------------------------------------- faces */
+function pruneSpurs(walk,px,py){
+  let ch=true;
+  while(ch&&walk.length>2){
+    ch=false;
+    for(let i=0;i<walk.length;i++){
+      const n=walk.length;
+      if(walk[(i-1+n)%n]!==walk[(i+1)%n])continue;
+      const j=(i+1)%n, rm=[i,j].sort((a,b)=>b-a);
+      for(const r of rm){walk.splice(r,1);px.splice(r,1);py.splice(r,1);}
+      ch=true;break;
+    }
+  }
+}
+function enumerateFaces(w,g){
+  const {start,nbr,dx,dy,revpos}=g, E2=g.E*2, seen=new Uint8Array(E2), faces=[];
+  for(let v=0;v<w.N;v++)for(let e0=start[v];e0<start[v+1];e0++){
+    if(seen[e0])continue;
+    const walk=[],px=[],py=[]; let e=e0,cx=0,cy=0,guard=0,ok=true;
+    do{
+      if(seen[e]){ok=false;break;}
+      seen[e]=1; walk.push(nbr[e]); cx+=dx[e]; cy+=dy[e]; px.push(cx); py.push(cy);
+      const rp=revpos[e],u=nbr[e],a=start[u],b=start[u+1];
+      e=a+((rp-a+1)%(b-a));
+      if(++guard>100000){ok=false;break;}
+    }while(e!==e0);
+    if(!ok||walk.length<3)continue;
+    if(Math.abs(cx)>1e-9||Math.abs(cy)>1e-9)continue;   // wraps the torus -> not a face
+    pruneSpurs(walk,px,py);
+    if(walk.length<3)continue;
+    let area=0;
+    for(let i=0;i<walk.length;i++){const j=(i+1)%walk.length;area+=px[i]*py[j]-px[j]*py[i];}
+    area/=2;
+    if(area>=-1e-9)continue;                            // bounded faces only
+    faces.push({nodes:walk,px,py,area});
+  }
+  return faces;
+}
+/* the game's scoring rule as a quenched excitability field:
+   (circles on the rim + dots enclosed), by colour, spread onto the rim nodes */
+function faceField(w,g,faces){
+  const {W,H,NC}=w, mod=new Float32Array(w.N), cnt=new Int32Array(w.N);
+  const isDot=new Uint8Array(NC);
+  for(let i=0;i<NC;i++) if(w.type[i]===DOT) isDot[i]=1;
+  for(const f of faces){
+    let wh=0,bl=0;
+    const rim=[...new Set(f.nodes)];
+    for(const n of rim) if(n<NC&&w.type[n]!==DOT&&w.type[n]!==EMPTY){ if(w.color[n]===0)wh++; else bl++; }
+    let mnx=1/0,mxx=-1/0,mny=1/0,mxy=-1/0;
+    for(let i=0;i<f.px.length;i++){
+      if(f.px[i]<mnx)mnx=f.px[i]; if(f.px[i]>mxx)mxx=f.px[i];
+      if(f.py[i]<mny)mny=f.py[i]; if(f.py[i]>mxy)mxy=f.py[i];
+    }
+    const n0=f.nodes[0]; let ox,oy;
+    if(n0<NC){ox=(n0%W)+.5;oy=((n0/W)|0)+.5;} else {const c=n0-NC;ox=c%w.cw;oy=(c/w.cw)|0;}
+    const bx=ox-f.px[0], by=oy-f.py[0];
+    for(let gy=Math.floor(mny+by);gy<=Math.ceil(mxy+by);gy++)
+    for(let gx=Math.floor(mnx+bx);gx<=Math.ceil(mxx+bx);gx++){
+      let cxi=gx,cyi=gy;
+      if(w.torus){cxi=((cxi%W)+W)%W;cyi=((cyi%H)+H)%H;}
+      else if(cxi<0||cyi<0||cxi>=W||cyi>=H)continue;
+      const kk=cxi+cyi*W; if(!isDot[kk])continue;
+      const qx=gx+.5-bx, qy=gy+.5-by; let inside=false;
+      for(let i=0,j=f.px.length-1;i<f.px.length;j=i++){
+        const xi=f.px[i],yi=f.py[i],xj=f.px[j],yj=f.py[j];
+        if(((yi>qy)!==(yj>qy))&&(qx<(xj-xi)*(qy-yi)/(yj-yi)+xi)) inside=!inside;
+      }
+      if(inside){ if(w.color[kk]===0)wh++; else bl++; }
+    }
+    const bal=wh-bl;
+    for(const n of rim){mod[n]+=bal;cnt[n]++;}
+  }
+  for(let i=0;i<w.N;i++) if(cnt[i]) mod[i]/=cnt[i];
+  return mod;
+}
+/* rim lists per face, and the inverted node -> faces index */
+function buildFaceTopo(w,faces){
+  const F=faces.length, fStart=new Int32Array(F+1), rims=[];
+  for(let f=0;f<F;f++){
+    const seen=new Set(),rim=[];
+    for(const n of faces[f].nodes) if(!seen.has(n)){seen.add(n);rim.push(n);}
+    rims.push(rim); fStart[f+1]=fStart[f]+rim.length;
+  }
+  const fNodes=new Int32Array(fStart[F]);
+  for(let f=0;f<F;f++)for(let i=0;i<rims[f].length;i++) fNodes[fStart[f]+i]=rims[f][i];
+  const cnt=new Int32Array(w.N);
+  for(let i=0;i<fNodes.length;i++) cnt[fNodes[i]]++;
+  const nfStart=new Int32Array(w.N+1);
+  for(let i=0;i<w.N;i++) nfStart[i+1]=nfStart[i]+cnt[i];
+  const nfList=new Int32Array(nfStart[w.N]), fill=nfStart.slice(0,w.N);
+  for(let f=0;f<F;f++)for(let i=fStart[f];i<fStart[f+1];i++) nfList[fill[fNodes[i]]++]=f;
+  return {F,fStart,fNodes,nfStart,nfList};
+}
+
+/* ---------------------------------------------------------- dynamics */
+/* ph: 0 rest, 1 excited, 2..rlen+1 refractory.   sg: +1 / -1 while ph > 0.
+   A resting CENTRE fires when the signed sum of excited inputs >= theta - g*mod
+   and emits its own colour's sign (Dale's law).  A resting CORNER relays sign(net);
+   net == 0 does nothing -- the game's "tie -> the circuit fizzles" rule.
+   Circuit feedback: when a whole circuit has fired within faceWin steps, every node
+   on its rim is marked for faceDur steps and its threshold is raised by faceA. */
+function makeSim(w,g,mod,par){
+  const N=w.N, R=par.R, ft=par.faceTopo;
+  const ph=new Uint8Array(N), sg=new Int8Array(N);
+  const nph=new Uint8Array(N), nsg=new Int8Array(N);
+  const net=new Float32Array(N), hit=new Uint8Array(N);
+  const rlen=new Uint8Array(N).fill(R);
+  const isCenter=new Uint8Array(N), live=new Uint8Array(N), outSign=new Int8Array(N);
+  for(let i=0;i<w.NC;i++){isCenter[i]=1; outSign[i]=w.color[i]===0?1:-1;}
+  let nLive=0;
+  for(let i=0;i<N;i++) if(g.start[i+1]>g.start[i]){live[i]=1;nLive++;}
+
+  /* The circuit bookkeeping is ALWAYS compiled in and faceA is read from par every
+     step. Building a second sim just to switch faceA makes step() polymorphic and costs
+     ~1.65x on every later step, permanently. With faceA = 0 the mark simply adds 0 to
+     the threshold, so this is bit-identical to not having it. */
+  const FBON=!!(ft&&ft.F>0), F=ft?ft.F:0;
+  const fb=new Uint8Array(N), age=new Uint8Array(N).fill(255);
+  const faceAge=new Uint8Array(F).fill(255), stamp=new Int32Array(F).fill(-1);
+  const firedNow=new Int32Array(N); let nFired=0, faceFires=0, tick=0;
+  const touched=new Int32Array(N); let nTouched=0;
+
+  function traversed(f,faceWin){
+    const a=ft.fStart[f], b=ft.fStart[f+1], n=b-a;
+    if(n<3) return false;
+    let c=0; for(let i=a;i<b;i++) if(age[ft.fNodes[i]]<=faceWin) c++;
+    return c>=n;                                  // the whole rim fired recently
+  }
+  function step(){
+    const faceA=par.faceA||0, faceDur=par.faceDur||8,
+          faceRef=par.faceRef||250, faceWin=par.faceWin||12;
+    nTouched=0; nFired=0;
+    for(let i=0;i<N;i++){                          // 1. deliver input
+      if(ph[i]!==1)continue;
+      const contrib=sg[i]>0?1:-par.wI;
+      for(let e=g.start[i],b=g.start[i+1];e<b;e++){
+        const j=g.nbr[e]; if(ph[j]!==0)continue;
+        if(!hit[j]){hit[j]=1;touched[nTouched++]=j;net[j]=0;}
+        net[j]+=contrib;
+      }
+    }
+    for(let i=0;i<N;i++){                          // 2. advance
+      const p=ph[i];
+      if(p===0){nph[i]=0;nsg[i]=sg[i];}
+      else if(p===1){nph[i]=R>0?2:0;nsg[i]=sg[i];}
+      else if(p>=rlen[i]+1){nph[i]=0;nsg[i]=sg[i];}
+      else {nph[i]=p+1;nsg[i]=sg[i];}
+    }
+    for(let t=0;t<nTouched;t++){                   // 3. firing decisions
+      const i=touched[t]; hit[i]=0; const s=net[i];
+      if(isCenter[i]){
+        let th=par.theta-par.g*mod[i]; if(th<.25)th=.25;
+        if(fb[i]) th+=faceA;
+        if(s>=th){nph[i]=1;nsg[i]=outSign[i];if(FBON)firedNow[nFired++]=i;}
+      } else {
+        const se=s+par.g*mod[i];
+        if(se>1e-9){nph[i]=1;nsg[i]=1;if(FBON)firedNow[nFired++]=i;}
+        else if(se<-1e-9){nph[i]=1;nsg[i]=-1;if(FBON)firedNow[nFired++]=i;}
+      }
+    }
+    if(FBON){                                      // 4. circuit feedback
+      for(let i=0;i<N;i++){if(fb[i])fb[i]--; if(age[i]<255)age[i]++;}
+      for(let i=0;i<F;i++) if(faceAge[i]<255) faceAge[i]++;
+      for(let k=0;k<nFired;k++) age[firedNow[k]]=0;
+      tick++;
+      for(let k=0;k<nFired;k++){
+        const i=firedNow[k];
+        for(let e=ft.nfStart[i],b=ft.nfStart[i+1];e<b;e++){
+          const f=ft.nfList[e];
+          if(stamp[f]===tick)continue; stamp[f]=tick;
+          if(faceAge[f]<faceRef)continue;
+          if(!traversed(f,faceWin))continue;
+          faceAge[f]=0; faceFires++;
+          for(let m=ft.fStart[f],mb=ft.fStart[f+1];m<mb;m++) fb[ft.fNodes[m]]=faceDur;
+        }
+      }
+    }
+    ph.set(nph); sg.set(nsg);
+  }
+  function activity(){let c=0;for(let i=0;i<N;i++)if(ph[i]===1)c++;return c;}
+  function anyAlive(){for(let i=0;i<N;i++)if(ph[i]!==0)return true;return false;}
+  /* every mutable array is state: a twin universe must copy all of it, or the
+     comparison is between two different systems instead of a one-node perturbation */
+  function copyFrom(s){ph.set(s.ph);sg.set(s.sg);rlen.set(s.rlen);fb.set(s.fb);
+    age.set(s.age);faceAge.set(s.faceAge);}
+  return {ph,sg,rlen,fb,age,faceAge,step,activity,anyAlive,copyFrom,par,
+          nLive,live,isCenter,outSign,N,R,F,get faceFires(){return faceFires;}};
+}
+
+/* A broken plane wave: an excited bar with a refractory tail behind it, cut off at
+   mid height so the free end curls. Act 2 will NOT ignite reliably from a random
+   sprinkle -- measured 4-5 failures out of 5 -- so this is how every Act 2 preset starts. */
+function seedBrokenWave(sim,w,R){
+  const W=w.W,H=w.H,x0=(W*.5)|0,nd=Math.ceil((R+1)/2)+1;
+  const set=(k,age)=>{if(k>=0&&sim.ph[k]===0){sim.ph[k]=age;sim.sg[k]=sim.outSign[k]||1;}};
+  for(let y=0;y<((H/2)|0);y++)for(let dc=0;dc<=nd;dc++){
+    const x=x0+dc; if(x>=W)continue;
+    const k=x+y*W; if(!sim.live[k])continue;
+    const age=dc===0?1:Math.min(R+1,2*dc);
+    sim.ph[k]=age; sim.sg[k]=sim.outSign[k];
+    if(dc>=1) for(const sl of cardSlots(w.type[k],w.orient[k]))
+      set(w.cornerIdx(x+SLOT_OFF[sl][0],y+SLOT_OFF[sl][1]),Math.min(R+1,age+1));
+  }
+}
+
+/* ==================================================================== app */
+const V=document.getElementById('view'), ctx=V.getContext('2d',{alpha:false});
+const off=document.createElement('canvas'), octx=off.getContext('2d');
+const PC=document.getElementById('plotc'), pctx=PC.getContext('2d');
+
+let w=null,g=null,mod=null,topo=null,sim=null,twin=null;
+let running=true, kiosk=false, kioskT=0, lang='ja', viewMode='paper';
+let cam={x:0,y:0,z:1};             // z = extra zoom on top of cell size
+let hist=[], step=0, dmgOn=false;
+let P={ igniteMode:'wave', W:0,H:0,cs:6,torus:true,q:.8,cross:.6,dot:.167,S:0,p:1,seed:7,
+        theta:2,R:20,g:0.63,wI:1,faceA:0,faceDur:24,faceRef:250,faceWin:12,speed:2 };
+
+/* ------------------------------------------------------------- presets */
+const PRESETS={
+  /* Act 1 -- the printed deck (cross = dot = 1/6, white:black = 1:1). Measured over
+     8 seeds at 160x100: A_tail 0 / 82 / 382 / 606 / 1528, a clean monotone ladder. */
+  act1:[
+    {k:'silent',  s:{cross:.1667,dot:.1667,q:.5,S:0,  g:0,R:6,theta:1,faceA:0},seed:'rand'},
+    {k:'poor',    s:{cross:.1667,dot:.1667,q:.5,S:.8, g:0,R:6,theta:1,faceA:0},seed:'rand'},
+    {k:'byplay',  s:{cross:.1667,dot:.1667,q:.5,S:1,  g:0,R:6,theta:1,faceA:0},seed:'rand'},
+    {k:'byscore', s:{cross:.1667,dot:.1667,q:.5,S:0,  g:2,R:6,theta:1,faceA:0},seed:'rand'},
+    {k:'both',    s:{cross:.1667,dot:.1667,q:.5,S:1,  g:2,R:6,theta:1,faceA:0},seed:'rand'},
+  ],
+  /* Act 2 -- detents on the main knob (see knobParams). */
+  act2:[{k:'quiet',u:.05},{k:'sparse',u:.15},{k:'waves',u:.38},{k:'spiral',u:.55},{k:'boiling',u:.90}],
+};
+
+/* The main knob. Measured, not guessed: the obvious path ("raise q, then raise faceA")
+   is NOT monotone -- rising q makes the medium MORE coherent, so it visits the boiling
+   look before the wave look and the audience sees the same picture twice. Instead hold q
+   high and ramp g, the game's own face-balance score, across the theta=2 percolation edge;
+   then trade q down for wave-breaking obstacles while g compensates, and finally engage
+   the circuit feedback. Monotone in coherence over 26 sampled u, 6 seeds each. */
+const GKNOTS=[[0,.100],[.10,.200],[.18,.225],[.30,.290],[.42,.420],[.50,.630]];
+function knobParams(u){
+  const o={cross:.6,dot:.1667,S:0,p:1,R:20,theta:2,faceRef:250,faceWin:12};
+  if(u<=.5){
+    o.q=.95; o.faceA=0; o.faceDur=24;
+    let gg=GKNOTS[0][1];
+    for(let i=1;i<GKNOTS.length;i++){
+      const a=GKNOTS[i-1],b=GKNOTS[i];
+      if(u<=b[0]){gg=a[1]+(b[1]-a[1])*(u-a[0])/(b[0]-a[0]);break;}
+      gg=b[1];
+    }
+    o.g=gg;
+  } else {
+    const t=(u-.5)/.5;
+    o.q=.95-.13*t;
+    o.g=.63/(2*o.q-1);                       // keep g*faceMod saturated as the imbalance falls
+    o.faceDur=u<=.66?0:Math.round(14+16*(u-.66)/.34);
+    o.faceA=o.faceDur>=5?2:0;                // faceA is a switch; faceDur is the amplitude
+  }
+  return o;
+}
+const KNOB_DETENT={quiet:.05,sparse:.15,waves:.38,spiral:.55,boiling:.90};
+
+/* ---------------------------------------------------------------- i18n */
+const TXT={
+ ja:{title:'NEURONS — 自己組織化',
+  sub:'ボードゲームのカードが作る配線の上を、興奮が走る。白い丸＝興奮性、黒い丸＝抑制性。回路が閉じると発火する。',
+  knob:'主ノブ',act1:'第1幕 — 印刷されたデッキ',act2:'第2幕 — 交差の多いデッキ',
+  adv:'詳細パラメータ',dyn:'力学(即時に効く)',wiresec:'配線(再生成が必要)',
+  R:'不応期 R',faceA:'回路の沈黙',faceDur:'沈黙の長さ',gg:'得点の場',speed:'速度',
+  q:'白:黒 比',cross:'交差カード',dot:'丸のみカード',S:'打ち手の戦略性',p:'被覆率',cs:'マスの大きさ',
+  play:'停止',pause:'再生',regen:'配線を作り直す',dmg:'差分を見る',newp:'もう一度',
+  kioskb:'自動巡回',act:'活動',order:'秩序',circ:'発火した回路',
+  ordered:'秩序 — 摂動は治癒する',chaotic:'カオス — 摂動が広がる',dead:'沈黙',waiting:'観測中…',
+  torus:'トーラス',wall:'壁',glow:'表示: 発光',paper:'表示: 紙',
+  p_silent:'沈黙',p_poor:'下手な打ち手',p_byplay:'本気で打つ',p_byscore:'得点の場',p_both:'両方',
+  p_quiet:'沈黙',p_sparse:'まばら',p_waves:'進行波',p_spiral:'スパイラル',p_boiling:'沸騰',
+  feed:'回路の帰還',locked:'位相ロック',auto:'速度: 自動',
+  pace:(v,ms,f)=>v+' 歩/フレーム · '+ms+' ms/歩 · '+f+' fps',
+  per:(n)=>'局所周期 '+n+' 歩',
+  tally:(h,d)=>'治癒 '+h+' ・ 伝染 '+d,
+  wire:(a,b,c)=>`${a}×${b} マス / 回路 ${c}`,
+  help:`<b>操作</b><br>
+   盤面を<b>クリック</b>すると、そこから活動が広がります。ホイールで拡大、ドラッグで移動。
+   拡大すると、発光表示から実際のカードの手描き表示に切り替わります。<br><br>
+   <b>「差分を見る」</b>は、同じ盤面・同じ状態の宇宙をもう一つ用意し、たった1ノードだけ状態を変えて並走させます。
+   差のあるところがマゼンタで描かれます。秩序相では差は消え、カオス相では全域に広がる。
+   これがカオスの定義そのものです。広がらないこともあります（摂動が成長する確率は約1/3）— 「もう一度」で打ち直せます。<br><br>
+   <kbd>space</kbd> 再生/停止　<kbd>R</kbd> 配線を作り直す　<kbd>D</kbd> 差分　<kbd>N</kbd> もう一度
+   　<kbd>←→</kbd> 主ノブ　<kbd>1-4</kbd> 第1幕　<kbd>5-8</kbd> 第2幕　<kbd>K</kbd> 自動巡回　<kbd>?</kbd> このヘルプ`},
+ en:{title:'NEURONS — self-organisation',
+  sub:'Excitation runs along the wiring the game’s cards build. White circle = excitatory, black = inhibitory. Closed circuits fire.',
+  knob:'main knob',act1:'Act 1 — the printed deck',act2:'Act 2 — a crossing-rich deck',
+  adv:'parameters',dyn:'dynamics (live)',wiresec:'wiring (regenerates)',
+  R:'refractory R',faceA:'circuit hush',faceDur:'hush length',gg:'scoring field',speed:'speed',
+  q:'white:black',cross:'cross cards',dot:'circle-only',S:'player skill',p:'coverage',cs:'cell size',
+  play:'pause',pause:'play',regen:'rebuild wiring',dmg:'show damage',newp:'re-inject',
+  kioskb:'auto cycle',act:'activity',order:'order',circ:'circuits fired',
+  ordered:'ORDERED — damage heals',chaotic:'CHAOTIC — damage spreads',dead:'silent',waiting:'measuring…',
+  torus:'torus',wall:'wall',glow:'view: glow',paper:'view: paper',
+  p_silent:'silent',p_poor:'a poor player',p_byplay:'played well',p_byscore:'scoring field',p_both:'both',
+  p_quiet:'silent',p_sparse:'sparse',p_waves:'waves',p_spiral:'spiral',p_boiling:'boiling',
+  feed:'circuit hush',locked:'phase lock',auto:'speed: auto',
+  pace:(v,ms,f)=>v+' steps/frame · '+ms+' ms/step · '+f+' fps',
+  per:(n)=>'local period '+n,
+  tally:(h,d)=>'healed '+h+' · spread '+d,
+  wire:(a,b,c)=>`${a}×${b} cells / ${c} circuits`,
+  help:`<b>Controls</b><br>
+   <b>Click</b> the board to start activity there. Wheel zooms, drag pans. Zoom in far enough and the
+   glow view becomes the game’s actual hand-drawn cards.<br><br>
+   <b>Show damage</b> forks a twin universe from the identical state, flips exactly one node, and runs both.
+   Wherever they differ is drawn in magenta. In the ordered phase the difference heals; in the chaotic
+   phase it spreads across the board. That is the definition of chaos, on screen. It does not always take
+   (a perturbation grows about one time in three) — press <b>re-inject</b> to try another site.<br><br>
+   <kbd>space</kbd> play/pause　<kbd>R</kbd> rebuild　<kbd>D</kbd> damage　<kbd>N</kbd> re-inject
+   　<kbd>←→</kbd> main knob　<kbd>1-4</kbd> act 1　<kbd>5-8</kbd> act 2　<kbd>K</kbd> cycle　<kbd>?</kbd> help`},
+};
+const T=()=>TXT[lang];
+
+/* ------------------------------------------------------------- build */
+function busy(on,msg){const b=document.getElementById('busy');
+  document.getElementById('busytx').textContent=msg||'';b.classList.toggle('on',on);}
+
+function rebuild(keepCam,keepState){
+  const snap=(keepState&&sim)?{N:sim.N,ph:sim.ph.slice(),sg:sim.sg.slice(),rlen:sim.rlen.slice(),
+    fb:sim.fb.slice(),age:sim.age.slice(),faceAge:sim.faceAge.slice()}:null;
+  const cs=P.cs;
+  P.W=Math.max(24,Math.floor(window.innerWidth/cs));
+  P.H=Math.max(16,Math.floor(window.innerHeight/cs));
+  const oldHist=hist.slice(), oldStep=step;
+  w=generateWiring({W:P.W,H:P.H,torus:P.torus,p:P.p,S:P.S,dot:P.dot,cross:P.cross,
+                    q:P.q,seed:P.seed,edgeOnly:false});
+  g=buildGraph(w);
+  const faces=enumerateFaces(w,g);
+  mod=(P.g!==0)?faceField(w,g,faces):new Float32Array(w.N);
+  topo=buildFaceTopo(w,faces);
+  P.nFaces=faces.length;
+  off.width=P.W; off.height=P.H;
+  const reuse=snap&&snap.N===w.N&&snap.faceAge.length===topo.F;
+  newSim(!reuse);
+  initSample();
+  if(reuse){
+    sim.copyFrom(snap);
+    for(let i=0;i<sim.N;i++) if(sim.ph[i]>P.R+1) sim.ph[i]=0;
+    hist=oldHist; step=oldStep;
+  }
+  if(!keepCam){cam={x:0,y:0,z:1};}
+  document.getElementById('rWire').textContent=T().wire(P.W,P.H,P.nFaces);
+}
+function newSim(seedIt){
+  sim=makeSim(w,g,mod,{theta:P.theta,R:P.R,g:P.g,wI:P.wI,faceTopo:topo,
+    faceA:P.faceA,faceDur:P.faceDur,faceRef:P.faceRef,faceWin:P.faceWin});
+  twin=null; dmgOn=false; setBtn('bdmg',false);
+  hist=[]; step=0;
+  if(seedIt) ignite();
+}
+/* Act 2 will not ignite from a random sprinkle (measured: 4-5 failures out of 5), so
+   anything but the printed-deck act starts from a broken wave. */
+function ignite(){
+  if(P.igniteMode==='rand'){
+    const rng=mulberry32((Math.random()*1e9)|0);
+    for(let i=0;i<w.NC;i++) if(sim.live[i]&&rng()<0.005){sim.ph[i]=1;sim.sg[i]=sim.outSign[i];}
+  } else seedBrokenWave(sim,w,P.R);
+}
+
+/* live dynamics change without touching the wiring */
+function refreshDyn(){
+  if(!sim||suppress)return;
+  /* theta, g and every face* field are read from par each step, so they need no rebuild */
+  sim.par.theta=P.theta; sim.par.g=P.g; sim.par.faceA=P.faceA;
+  sim.par.faceDur=P.faceDur; sim.par.faceRef=P.faceRef; sim.par.faceWin=P.faceWin;
+  if(twin){twin.par.theta=P.theta;twin.par.g=P.g;twin.par.faceA=P.faceA;
+           twin.par.faceDur=P.faceDur;twin.par.faceRef=P.faceRef;twin.par.faceWin=P.faceWin;}
+  if(sim.R===P.R) return;                 // only R is baked into the state arrays
+  const keep={ph:sim.ph.slice(),sg:sim.sg.slice(),rlen:sim.rlen.slice(),
+              fb:sim.fb.slice(),age:sim.age.slice(),faceAge:sim.faceAge.slice()};
+  const hadTwin=!!twin, tk=twin?{ph:twin.ph.slice(),sg:twin.sg.slice(),rlen:twin.rlen.slice(),
+              fb:twin.fb.slice(),age:twin.age.slice(),faceAge:twin.faceAge.slice()}:null;
+  sim=makeSim(w,g,mod,{theta:P.theta,R:P.R,g:P.g,wI:P.wI,faceTopo:topo,
+    faceA:P.faceA,faceDur:P.faceDur,faceRef:P.faceRef,faceWin:P.faceWin});
+  sim.copyFrom(keep);
+  for(let i=0;i<sim.N;i++) if(sim.ph[i]>P.R+1) sim.ph[i]=0;   // shrinking R must not strand nodes
+  if(hadTwin){
+    twin=makeSim(w,g,mod,{theta:P.theta,R:P.R,g:P.g,wI:P.wI,faceTopo:topo,
+      faceA:P.faceA,faceDur:P.faceDur,faceRef:P.faceRef,faceWin:P.faceWin});
+    twin.copyFrom(tk);
+    for(let i=0;i<twin.N;i++) if(twin.ph[i]>P.R+1) twin.ph[i]=0;
+  }
+}
+/* fork a twin universe and flip exactly one node */
+function inject(){
+  twin=makeSim(w,g,mod,{theta:P.theta,R:P.R,g:P.g,wI:P.wI,faceTopo:topo,
+    faceA:P.faceA,faceDur:P.faceDur,faceRef:P.faceRef,faceWin:P.faceWin});
+  twin.copyFrom(sim);
+  const start=(Math.random()*w.NC)|0;
+  for(let k=0;k<w.NC;k++){
+    const j=(start+k*7919)%w.NC;
+    if(!twin.live[j]||twin.ph[j]!==0)continue;
+    let free=0;
+    for(let e=g.start[j];e<g.start[j+1];e++) if(twin.ph[g.nbr[e]]===0) free++;
+    if(!free)continue;                      // a sterile injection would prove nothing
+    twin.ph[j]=1; twin.sg[j]=twin.outSign[j]; break;
+  }
+  dmgOn=true; dmgZero=0; setBtn('bdmg',true);
+}
+
+/* ------------------------------------------------------------ render */
+const PAL={
+  glow :{bg:[10,10,14],  rest:[38,38,48],  warm:[255,196,80], cool:[86,170,255], dot:[24,24,30],   fade:.6},
+  paper:{bg:[253,251,244],rest:[230,224,210],warm:[206,84,26],  cool:[40,92,166],  dot:[236,230,216],fade:.85},
+};
+const DMG=[255,40,190];
+function nodeCol(ph,sg,R,pal){
+  if(ph===0)return pal.rest;
+  if(ph===1)return sg>0?pal.warm:pal.cool;
+  let f=1-(ph-1)/Math.max(1,R); if(f<0)f=0; else if(f>1)f=1;
+  const b=sg>0?pal.warm:pal.cool;
+  return [pal.rest[0]+(b[0]-pal.rest[0])*f*pal.fade,
+          pal.rest[1]+(b[1]-pal.rest[1])*f*pal.fade,
+          pal.rest[2]+(b[2]-pal.rest[2])*f*pal.fade];
+}
+let fieldIm=null;
+function drawField(pal){
+  if(!fieldIm||fieldIm.width!==P.W||fieldIm.height!==P.H) fieldIm=octx.createImageData(P.W,P.H);
+  const im=fieldIm, d=im.data;
+  for(let i=0;i<w.NC;i++){
+    let c;
+    if(dmgOn&&twin&&sim.ph[i]!==twin.ph[i]) c=DMG;
+    else if(w.type[i]===EMPTY) c=pal.bg;
+    else if(w.type[i]===DOT) c=pal.dot;
+    else c=nodeCol(sim.ph[i],sim.sg[i],P.R,pal);
+    const o=i*4; d[o]=c[0]; d[o+1]=c[1]; d[o+2]=c[2]; d[o+3]=255;
+  }
+  octx.putImageData(im,0,0);
+  ctx.imageSmoothingEnabled=false;
+  const s=P.cs*cam.z;
+  ctx.drawImage(off,cam.x,cam.y,P.W*s,P.H*s);
+}
+function drawWires(pal,paper){
+  const s=P.cs*cam.z;
+  ctx.fillStyle=`rgb(${pal.bg[0]},${pal.bg[1]},${pal.bg[2]})`;
+  ctx.fillRect(0,0,V.width,V.height);
+  const x0=Math.max(0,Math.floor(-cam.x/s)-1), x1=Math.min(P.W,Math.ceil((V.width-cam.x)/s)+1);
+  const y0=Math.max(0,Math.floor(-cam.y/s)-1), y1=Math.min(P.H,Math.ceil((V.height-cam.y)/s)+1);
+  const px=(v)=>cam.x+v*s, py=(v)=>cam.y+v*s;
+  if(paper){                                   // card faces, like the game
+    ctx.fillStyle='#fffdf7'; ctx.strokeStyle='rgba(0,0,0,.10)'; ctx.lineWidth=1;
+    for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){
+      if(w.type[x+y*P.W]===EMPTY)continue;
+      ctx.beginPath(); ctx.rect(px(x)+1,py(y)+1,s-2,s-2); ctx.fill(); ctx.stroke();
+    }
+  }
+  const bucket=new Map();
+  for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){
+    const k=x+y*P.W, t=w.type[k];
+    if(t===EMPTY||t===DOT)continue;
+    const cA=(dmgOn&&twin&&sim.ph[k]!==twin.ph[k])?DMG:nodeCol(sim.ph[k],sim.sg[k],P.R,pal);
+    for(const sl of cardSlots(t,w.orient[k])){
+      const c=w.cornerIdx(x+SLOT_OFF[sl][0],y+SLOT_OFF[sl][1]);
+      const cB=(dmgOn&&twin&&sim.ph[c]!==twin.ph[c])?DMG:nodeCol(sim.ph[c],sim.sg[c],P.R,pal);
+      const col=`rgb(${((cA[0]+cB[0])/2)|0},${((cA[1]+cB[1])/2)|0},${((cA[2]+cB[2])/2)|0})`;
+      let arr=bucket.get(col); if(!arr){arr=[];bucket.set(col,arr);}
+      arr.push(px(x+.5),py(y+.5),px(x+SLOT_OFF[sl][0]),py(y+SLOT_OFF[sl][1]));
+    }
+  }
+  ctx.lineWidth=Math.max(1,s/7); ctx.lineCap='round';
+  for(const [col,arr] of bucket){
+    ctx.strokeStyle=col; ctx.beginPath();
+    for(let i=0;i<arr.length;i+=4){ctx.moveTo(arr[i],arr[i+1]);ctx.lineTo(arr[i+2],arr[i+3]);}
+    ctx.stroke();
+  }
+  const r=Math.max(1.6,s*.16);                 // the neurons themselves
+  for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){
+    const k=x+y*P.W, t=w.type[k]; if(t===EMPTY)continue;
+    const c=(dmgOn&&twin&&sim.ph[k]!==twin.ph[k])?DMG:nodeCol(sim.ph[k],sim.sg[k],P.R,pal);
+    ctx.beginPath(); ctx.arc(px(x+.5),py(y+.5),r,0,6.2832);
+    ctx.fillStyle=w.color[k]===0?(paper?'#fffdf7':'#f2efe8'):(paper?'#2b2723':'#15151b');
+    ctx.fill();
+    ctx.lineWidth=Math.max(1,s*.05); ctx.strokeStyle=`rgb(${c[0]|0},${c[1]|0},${c[2]|0})`; ctx.stroke();
+  }
+}
+/* Which renderer to use is purely a performance choice: the far view draws one pixel
+   per cell, the near view draws the actual card line segments. The PALETTE is not tied
+   to zoom, so nothing visibly flips while you zoom. */
+function useWires(){ return P.cs*cam.z>=13; }   // measured crossover
+/* never let the board be smaller than the viewport, or bare background shows through */
+function clampCam(){
+  const vw=V.clientWidth, vh=V.clientHeight;
+  const minz=Math.max(vw/(P.cs*P.W), vh/(P.cs*P.H));
+  if(cam.z<minz) cam.z=minz;
+  if(cam.z>10) cam.z=10;
+  const sw=P.cs*cam.z*P.W, sh=P.cs*cam.z*P.H;
+  cam.x=Math.min(0,Math.max(vw-sw,cam.x));
+  cam.y=Math.min(0,Math.max(vh-sh,cam.y));
+}
+function draw(){
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  if(V.width!==(V.clientWidth*dpr|0)||V.height!==(V.clientHeight*dpr|0)){
+    V.width=V.clientWidth*dpr|0; V.height=V.clientHeight*dpr|0;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  const paper=(viewMode==='paper');
+  const pal=paper?PAL.paper:PAL.glow;
+  document.body.classList.toggle('paper',paper);
+  clampCam();
+  if(useWires()) drawWires(pal,paper);
+  else {
+    ctx.fillStyle=`rgb(${pal.bg[0]},${pal.bg[1]},${pal.bg[2]})`;
+    ctx.fillRect(0,0,V.clientWidth,V.clientHeight);
+    drawField(pal);
+  }
+}
+function drawPlot(){
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  PC.width=PC.clientWidth*dpr|0; PC.height=PC.clientHeight*dpr|0;
+  pctx.setTransform(dpr,0,0,dpr,0,0);
+  const W=PC.clientWidth,H=PC.clientHeight;
+  pctx.clearRect(0,0,W,H);
+  if(hist.length<2)return;
+  let mx=1; for(const v of hist) if(v>mx)mx=v;
+  pctx.strokeStyle='rgba(255,196,80,.9)'; pctx.lineWidth=1.5; pctx.beginPath();
+  for(let i=0;i<hist.length;i++){
+    const x=W*i/(hist.length-1), y=H-4-(H-10)*hist[i]/mx;
+    i?pctx.lineTo(x,y):pctx.moveTo(x,y);
+  }
+  pctx.stroke();
+  if(dmgOn&&dmgHist.length>1){
+    let dm=1; for(const v of dmgHist) if(v>dm)dm=v;
+    pctx.strokeStyle='rgba(255,40,190,.95)'; pctx.beginPath();
+    for(let i=0;i<dmgHist.length;i++){
+      const x=W*i/(dmgHist.length-1), y=H-4-(H-10)*dmgHist[i]/Math.max(dm,sim.nLive*.02);
+      i?pctx.lineTo(x,y):pctx.moveTo(x,y);
+    }
+    pctx.stroke();
+  }
+}
+
+/* ---- sampled LOCAL period: the honest live order parameter ------------------
+   A global exact-cycle detector is the wrong instrument here. It costs 2.1-2.5x a whole
+   simulation step and, because the global period is the LCM of many small local periods
+   (measured at 6.1e8 on a perfectly ordered board), it reports "no period" on an ordered
+   board 31-69% of the time depending on how long you wait. What the audience actually
+   watches is the local tempo, so sample it: keep the last 256 steps of the spike train for
+   a few thousand nodes and take each one's minimal period with a KMP failure function.
+   Reads 1.00 / 1.00 / 0.93 / 0.24 / 0.09 / 0.00 along the Act 2 knob -- a dial, not a lamp. */
+const HL=256, NSAMP=2048, SLICE=512;
+let samp=null, train=null, sampT=0, scanPos=0, lockedPct=0, modalPer=0;
+const kmpF=new Int32Array(HL), kmpB=new Uint8Array(HL);
+function initSample(){
+  const liveIdx=[]; for(let i=0;i<w.NC;i++) if(sim.live[i]) liveIdx.push(i);
+  const rng=mulberry32(0xC0FFEE);
+  samp=new Int32Array(Math.min(NSAMP,liveIdx.length));
+  for(let i=0;i<samp.length;i++) samp[i]=liveIdx[(rng()*liveIdx.length)|0];
+  train=new Uint8Array(samp.length*HL); sampT=0; scanPos=0; lockedPct=-1; modalPer=0;
+}
+function pushSample(){
+  if(!samp)return;
+  const o=sampT%HL;
+  for(let i=0;i<samp.length;i++) train[i*HL+o]=sim.ph[samp[i]]===1?1:0;
+  sampT++;
+}
+function scanSample(){
+  if(!samp||sampT<HL)return;
+  const n=samp.length; let locked=0,tot=0; const hist=new Map();
+  for(let k=0;k<SLICE&&k<n;k++){
+    const i=(scanPos+k)%n, base=i*HL;
+    for(let t=0;t<HL;t++) kmpB[t]=train[base+((sampT+t)%HL)];
+    kmpF[0]=0; let j=0;
+    for(let t=1;t<HL;t++){
+      while(j>0&&kmpB[t]!==kmpB[j]) j=kmpF[j-1];
+      if(kmpB[t]===kmpB[j]) j++;
+      kmpF[t]=j;
+    }
+    const per=HL-kmpF[HL-1];
+    tot++;
+    if(per<=128){locked++;hist.set(per,(hist.get(per)||0)+1);}
+  }
+  scanPos=(scanPos+SLICE)%n;
+  const pct=tot?locked/tot:0;
+  lockedPct = lockedPct<0 ? pct : lockedPct*.75+pct*.25;
+  let best=0,bc=0; for(const [k,v] of hist) if(v>bc){bc=v;best=k;}
+  if(best) modalPer=best;
+}
+
+/* --------------------------------------------------------- main loop */
+let dmgHist=[], phaseTxt='', dmgZero=0, tally={healed:0,spread:0}, counted=false;
+/* One step advances a front by half a cell, so this spans a slow crawl you can follow
+   card by card (1 step every 30 frames) up to a fast boil (24 steps a frame). */
+const SPEEDS=[0.033,0.05,0.08,0.125,0.2,0.33,0.5,0.75,1,1.5,2,3,4,6,8,12,16,24];
+let stepMs=0.3, calT=0, deadFor=0, stepAcc=0, fps=60, lastT=0, autoSpeed=true;
+function speedLabel(v){ return v<1 ? '1/'+Math.round(1/v) : (v<10?v.toFixed(v%1?1:0):String(v)); }
+function setSpeedIdx(i,manual){
+  i=Math.max(0,Math.min(SPEEDS.length-1,i|0));
+  P.speed=SPEEDS[i];
+  const e=document.getElementById('sSp'); if(e)e.value=i;
+  const o=document.getElementById('oSp'); if(o)o.textContent=speedLabel(P.speed);
+  if(manual){autoSpeed=false;setBtn('bauto',false);}
+}
+function tick(){
+  if(running&&sim){
+    const t0=performance.now();
+    stepAcc+=P.speed;
+    const n=Math.floor(stepAcc); stepAcc-=n;
+    for(let s=0;s<n;s++){ sim.step(); if(twin) twin.step(); step++; pushSample(); }
+    if(n) stepMs=stepMs*.9+((performance.now()-t0)/n)*.1;
+    /* in auto mode, pick the fastest pace this machine can actually sustain -- it also
+       tracks thermal throttling and whatever laptop the talk is given on */
+    if(++calT>120){calT=0;
+      if(autoSpeed){
+        const want=6/Math.max(.05,stepMs);
+        let bi=0; for(let i=0;i<SPEEDS.length;i++) if(SPEEDS[i]<=Math.min(8,want)) bi=i;
+        setSpeedIdx(bi,false);
+      }
+    }
+    scanSample();
+    const a=sim.activity();
+    hist.push(a); if(hist.length>900)hist.shift();
+    if(twin){
+      let d=0; for(let i=0;i<sim.N;i++) if(sim.ph[i]!==twin.ph[i])d++;
+      dmgHist.push(d); if(dmgHist.length>900)dmgHist.shift();
+      const fr=d/sim.nLive;
+      /* Even in the chaotic phase a single perturbation heals about half the time, so one
+         injection proves nothing. Keep re-injecting and show the running tally. */
+      if(fr>0.02){ if(!counted){tally.spread++;counted=true;} phaseTxt='chaotic'; }
+      else if(d===0){
+        phaseTxt='ordered';
+        if(++dmgZero>30){ if(!counted)tally.healed++; counted=false; dmgZero=0; inject(); }
+      } else phaseTxt='waiting';
+    } else phaseTxt = a===0 ? 'dead' : '';
+    /* kiosk watchdog: a bad seed in the sparse band otherwise leaves a black screen
+       in the middle of a sentence */
+    if(a===0){ if(++deadFor>30){deadFor=0; if(P.igniteMode!=='rand') ignite();} } else deadFor=0;
+    document.getElementById('rAct').textContent=a.toLocaleString();
+    const lk=document.getElementById('rLock');
+    /* an all-rest board is trivially "locked"; say silent instead */
+    if(a===0){lk.textContent='—';lk.className='big dead';document.getElementById('rPer').textContent=T().dead;}
+    else if(lockedPct<0||sampT<HL){lk.textContent='…';lk.className='big';document.getElementById('rPer').textContent='';}
+    else{
+      lk.textContent=(lockedPct*100).toFixed(0)+'%';
+      lk.className='big '+(lockedPct>.75?'ordered':lockedPct<.35?'chaotic':'');
+      document.getElementById('rPer').textContent=modalPer?T().per(modalPer):'';
+    }
+    document.getElementById('rTally').textContent =
+      (tally.healed||tally.spread)?T().tally(tally.healed,tally.spread):'';
+    document.getElementById('rCirc').textContent=sim.faceFires.toLocaleString();
+    const el=document.getElementById('rPhase');
+    el.className='phase '+(phaseTxt||'');
+    el.textContent = phaseTxt? T()[phaseTxt] : '—';
+  }
+  if(kiosk&&++kioskT>420){kioskT=0;cycleKiosk();}
+  const now=performance.now();
+  if(lastT) fps=fps*.9+(1000/Math.max(1,now-lastT))*.1;
+  lastT=now;
+  const pace=document.getElementById('rPace');
+  if(pace) pace.textContent=T().pace(speedLabel(P.speed),stepMs.toFixed(2),Math.round(fps));
+  draw(); drawPlot();
+  requestAnimationFrame(tick);
+}
+
+/* ------------------------------------------------------------- wiring UI */
+function setBtn(id,on){document.getElementById(id).classList.toggle('on',!!on);}
+function bind(sid,oid,key,fmt,live){
+  const s=document.getElementById(sid),o=document.getElementById(oid);
+  const upd=()=>{o.textContent=fmt(+s.value);};
+  s.addEventListener('input',()=>{P[key]=+s.value;upd();
+    if(live)refreshDyn(); else pending=true;});
+  s.addEventListener('input',()=>{if(!live&&!suppress) scheduleRebuild(true);});
+  s.value=P[key]; upd();
+  return s;
+}
+let pending=false, suppress=false, rebuildT=0;
+function scheduleRebuild(keepState){
+  clearTimeout(rebuildT);
+  rebuildT=setTimeout(()=>{rebuild(true,keepState);},110);
+}
+function applyPreset(sp,smooth){
+  let wireChanged=false;
+  for(const k in sp){
+    if(['cross','dot','q','S','p','torus'].includes(k)&&P[k]!==sp[k]) wireChanged=true;
+    P[k]=sp[k];
+  }
+  syncUI();
+  if(wireChanged) scheduleRebuild(smooth);
+  else refreshDyn();
+}
+function syncUI(){
+  suppress=true;
+  /* speed is deliberately absent: its slider is an INDEX into SPEEDS, not the value,
+     and a preset must never silently take the pace away from the speaker */
+  const m={sR:'R',sFA:'faceA',sFD:'faceDur',sG:'g',
+           sQ:'q',sC:'cross',sD:'dot',sS:'S',sP:'p',sCS:'cs'};
+  for(const id in m){const e=document.getElementById(id); if(e){e.value=P[m[id]]; e.dispatchEvent(new Event('input'));}}
+  suppress=false;
+}
+/* Act 1 uses the printed deck and a random sprinkle; it is a different board every time */
+function gotoAct1(pr){
+  P.igniteMode='rand';
+  applyPreset(pr.s);
+  setTimeout(()=>{newSim(true);initSample();},60);
+}
+/* Act 2 lives on ONE board: q, g, faceA and faceDur are all non-structural, so the knob
+   is a live dial and the medium keeps its state as it moves */
+function gotoKnob(u){
+  P.igniteMode='wave';
+  const kn=document.getElementById('knob');
+  kn.value=Math.round(u*1000);
+  document.getElementById('knobv').textContent=u.toFixed(2);
+  applyPreset(knobParams(u),true);
+}
+function cycleKiosk(){
+  const all=[...PRESETS.act1.map(p=>({a1:p})),...PRESETS.act2.map(p=>({u:p.u}))];
+  cycleKiosk.i=((cycleKiosk.i||0)+1)%all.length;
+  const it=all[cycleKiosk.i];
+  if(it.a1) gotoAct1(it.a1); else gotoKnob(it.u);
+}
+function relabel(){
+  const t=T();
+  document.getElementById('t-title').textContent=t.title;
+  document.getElementById('t-sub').textContent=t.sub;
+  document.getElementById('t-knob').textContent=t.knob;
+  document.getElementById('t-act1').textContent=t.act1;
+  document.getElementById('t-act2').textContent=t.act2;
+  document.getElementById('t-adv').textContent=t.adv;
+  document.getElementById('t-dyn').textContent=t.dyn;
+  document.getElementById('t-wire').textContent=t.wiresec;
+  const ids={'t-R':'R','t-faceA':'faceA','t-faceDur':'faceDur','t-g':'gg','t-speed':'speed',
+             't-q':'q','t-cross':'cross','t-dot':'dot','t-S':'S','t-p':'p','t-cs':'cs',
+             't-act':'act','t-order':'order','t-circ':'circ'};
+  for(const id in ids){const e=document.getElementById(id); if(e)e.textContent=t[ids[id]];}
+  document.getElementById('bplay').textContent=running?t.play:t.pause;
+  document.getElementById('bregen').textContent=t.regen;
+  document.getElementById('bdmg').textContent=t.dmg;
+  document.getElementById('bnew').textContent=t.newp;
+  document.getElementById('bkiosk').textContent=t.kioskb;
+  document.getElementById('blang').textContent=lang==='ja'?'EN':'日本語';
+  document.getElementById('btorus').textContent=P.torus?t.torus:t.wall;
+  document.getElementById('bview').textContent=t[viewMode];
+  document.getElementById('help').innerHTML=t.help;
+  const p1=document.getElementById('pre1'); p1.innerHTML='';
+  PRESETS.act1.forEach(pr=>{
+    const b=document.createElement('button'); b.textContent=t['p_'+pr.k];
+    b.onclick=()=>gotoAct1(pr); p1.appendChild(b);
+  });
+  const p2=document.getElementById('pre2'); p2.innerHTML='';
+  PRESETS.act2.forEach(pr=>{
+    const b=document.createElement('button'); b.textContent=t['p_'+pr.k];
+    b.onclick=()=>gotoKnob(pr.u); p2.appendChild(b);
+  });
+  document.getElementById('bfeed').textContent=t.feed;
+  document.getElementById('bauto').textContent=t.auto;
+  document.getElementById('t-locked').textContent=t.locked;
+  if(w) document.getElementById('rWire').textContent=t.wire(P.W,P.H,P.nFaces);
+}
+
+/* ---------------------------------------------------------- interaction */
+V.addEventListener('pointerdown',e=>{
+  V.setPointerCapture(e.pointerId);
+  V.dataset.dx=e.clientX; V.dataset.dy=e.clientY; V.dataset.moved='0';
+});
+V.addEventListener('pointermove',e=>{
+  if(!V.hasPointerCapture(e.pointerId))return;
+  const dx=e.clientX-+V.dataset.dx, dy=e.clientY-+V.dataset.dy;
+  if(Math.abs(dx)+Math.abs(dy)>3){V.dataset.moved='1';cam.x+=dx;cam.y+=dy;clampCam();
+    V.dataset.dx=e.clientX;V.dataset.dy=e.clientY;}
+});
+V.addEventListener('pointerup',e=>{
+  V.releasePointerCapture(e.pointerId);
+  if(V.dataset.moved==='1'||!sim)return;
+  const s=P.cs*cam.z;
+  const cx=Math.floor((e.clientX-cam.x)/s), cy=Math.floor((e.clientY-cam.y)/s);
+  for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+    const x=cx+dx,y=cy+dy; if(x<0||y<0||x>=P.W||y>=P.H)continue;
+    const k=x+y*P.W; if(sim.live[k]&&sim.ph[k]===0){sim.ph[k]=1;sim.sg[k]=sim.outSign[k];}
+  }
+});
+V.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const f=Math.exp(-e.deltaY*.0016), nz=Math.min(10,cam.z*f);
+  cam.x=e.clientX-(e.clientX-cam.x)*(nz/cam.z);
+  cam.y=e.clientY-(e.clientY-cam.y)*(nz/cam.z);
+  cam.z=nz; clampCam();
+},{passive:false});
+
+document.getElementById('bplay').onclick=()=>{running=!running;relabel();};
+document.getElementById('bregen').onclick=()=>{P.seed=(Math.random()*1e9)|0;
+  busy(true,'…');setTimeout(()=>{rebuild(false);busy(false);},16);};
+document.getElementById('bdmg').onclick=()=>{ if(dmgOn){dmgOn=false;twin=null;dmgHist=[];setBtn('bdmg',false);}
+  else {dmgHist=[];tally={healed:0,spread:0};counted=false;inject();} };
+document.getElementById('bnew').onclick=()=>{dmgHist=[];counted=false;inject();};
+document.getElementById('bfeed').onclick=()=>{
+  P.faceA=P.faceA>0?0:2;
+  if(P.faceDur<5)P.faceDur=24;
+  if(sim){sim.par.faceA=P.faceA;sim.par.faceDur=P.faceDur;}
+  if(twin){twin.par.faceA=P.faceA;twin.par.faceDur=P.faceDur;}
+  const e=document.getElementById('sFA'); if(e){e.value=P.faceA;e.dispatchEvent(new Event('input'));}
+  setBtn('bfeed',P.faceA>0);
+document.getElementById('sSp').addEventListener('input',e=>setSpeedIdx(+e.target.value,true));
+document.getElementById('bauto').onclick=()=>{autoSpeed=!autoSpeed;setBtn('bauto',autoSpeed);calT=999;};
+setSpeedIdx(10,false); setBtn('bauto',true);
+};
+document.getElementById('bkiosk').onclick=()=>{kiosk=!kiosk;kioskT=0;setBtn('bkiosk',kiosk);};
+document.getElementById('blang').onclick=()=>{lang=lang==='ja'?'en':'ja';
+  document.documentElement.lang=lang;relabel();};
+document.getElementById('bhelp').onclick=()=>document.getElementById('help').classList.toggle('on');
+document.getElementById('btorus').onclick=()=>{P.torus=!P.torus;relabel();
+  busy(true,'…');setTimeout(()=>{rebuild(false);busy(false);},16);};
+document.getElementById('bview').onclick=()=>{
+  viewMode=viewMode==='paper'?'glow':'paper'; relabel();};
+
+const knob=document.getElementById('knob');
+knob.addEventListener('input',()=>{
+  const u=+knob.value/1000;
+  document.getElementById('knobv').textContent=u.toFixed(2);
+  applyPreset(knobParams(u),true);
+});
+
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  const k=e.key.toLowerCase();
+  if(k===' '){e.preventDefault();running=!running;relabel();}
+  else if(k==='r')document.getElementById('bregen').click();
+  else if(k==='d')document.getElementById('bdmg').click();
+  else if(k==='n')document.getElementById('bnew').click();
+  else if(k==='k')document.getElementById('bkiosk').click();
+  else if(k==='l')document.getElementById('blang').click();
+  else if(k==='?'||k==='/')document.getElementById('bhelp').click();
+  else if(k==='arrowleft'||k==='arrowright'){
+    knob.value=Math.max(0,Math.min(1000,+knob.value+(k==='arrowright'?25:-25)));
+    knob.dispatchEvent(new Event('input'));
+  } else if(k>='1'&&k<='9'){
+    const i=+k-1;
+    if(i<5){ const a=PRESETS.act1[i]; if(a)gotoAct1(a); }
+    else { const a=PRESETS.act2[i-5]; if(a)gotoKnob(a.u); }
+  } else if(k==='f') document.getElementById('bfeed').click();
+  else if(k===','||k==='<') setSpeedIdx(+document.getElementById('sSp').value-1,true);
+  else if(k==='.'||k==='>') setSpeedIdx(+document.getElementById('sSp').value+1,true);
+});
+let rt=0;
+addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{busy(true,'…');
+  setTimeout(()=>{rebuild(true);busy(false);},16);},260);});
+
+/* ------------------------------------------------------------- start */
+lang=(navigator.language||'').toLowerCase().startsWith('ja')?'ja':'en';
+document.documentElement.lang=lang;
+bind('sR','oR','R',v=>v,true);
+bind('sFA','oFA','faceA',v=>v.toFixed(2),true);
+bind('sFD','oFD','faceDur',v=>v,true);
+setBtn('bfeed',P.faceA>0);
+document.getElementById('sSp').addEventListener('input',e=>setSpeedIdx(+e.target.value,true));
+document.getElementById('bauto').onclick=()=>{autoSpeed=!autoSpeed;setBtn('bauto',autoSpeed);calT=999;};
+setSpeedIdx(10,false); setBtn('bauto',true);
+bind('sG','oG','g',v=>v.toFixed(1),false);
+
+bind('sQ','oQ','q',v=>v.toFixed(2),false);
+bind('sC','oC','cross',v=>v.toFixed(2),false);
+bind('sD','oD','dot',v=>v.toFixed(2),false);
+bind('sS','oS','S',v=>v.toFixed(1),false);
+bind('sP','oP','p',v=>v.toFixed(2),false);
+bind('sCS','oCS','cs',v=>v+'px',false);
+relabel();
+{ const u=+knob.value/1000; Object.assign(P,knobParams(u)); suppress=true; syncUI(); suppress=false;
+  document.getElementById('knobv').textContent=u.toFixed(2); }
+busy(true,'…');
+setTimeout(()=>{rebuild(false);busy(false);tick();},30);
+</script>
+</body>
+</html>
