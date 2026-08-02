@@ -163,18 +163,6 @@ button.flat:active { transform: translateY(1px); }
 #mode-card .flat.opt { font-size: 12px; padding: 6px 12px; border: 2px solid transparent; }
 #mode-card .flat.opt.sel { border-color: var(--fire-deep); }
 
-/* --- action potential: a spike running down one wire segment --- */
-.spike { stroke: var(--fire); fill: none; stroke-linecap: round; pointer-events: none;
-  filter: drop-shadow(0 0 3px var(--fire)); }
-@keyframes spikerun { from { stroke-dashoffset: 26; } to { stroke-dashoffset: -100; } }
-/* --- soma firing: the cell body swells and fades --- */
-.soma { pointer-events: none; }
-@keyframes somapop {
-  0%   { opacity: 0;               transform: scale(.45); }
-  28%  { opacity: var(--amp, 1);   transform: scale(1.25); }
-  100% { opacity: 0;               transform: scale(1.75); }
-}
-
 @media (max-width: 420px) {
   .title-card .word { font-size: 18px; }
   .score-chip { padding: 3px 7px; font-size: 12px; }
@@ -495,8 +483,7 @@ function resolvePlacement(board, mover) {
     if (r.white > r.black) winner = 'white';
     else if (r.black > r.white) winner = 'black';
     else winner = null; // tie -> no one scores
-    events.push({ signature: f.signature, cycle: f.cycle, white: r.white, black: r.black, winner, points: total,
-      contributing: r.contributing.map(c => ({ x: c.x, y: c.y })) });
+    events.push({ signature: f.signature, cycle: f.cycle, white: r.white, black: r.black, winner, points: total });
   }
   return events;
 }
@@ -891,98 +878,6 @@ function setStatusEvents(events) {
   s.appendChild(t);
 }
 
-/* ================= action potential propagation =================
-   A spike sweeps outward from the card just played, hop by hop along the
-   wires, the way a real action potential travels down an axon. When a
-   circuit closed, the whole network fires at full strength; otherwise the
-   signal is sub-threshold and dies away with distance. */
-const SPIKE_MS = 190;   // time for a spike to cross one wire segment
-const SOMA_MS  = 400;   // how long a cell body stays lit
-
-function spikeLine(p, q, delay, amp) {
-  const ln = el('line', { x1: px(p.x), y1: px(p.y), x2: px(q.x), y2: px(q.y),
-    class: 'spike', pathLength: 100 });
-  ln.style.strokeDasharray = '26 100';
-  ln.style.strokeWidth = (2 + 2.6 * amp).toFixed(2);
-  ln.style.opacity = (0.28 + 0.72 * amp).toFixed(2);
-  ln.style.animation = 'spikerun ' + SPIKE_MS + 'ms linear ' + Math.round(delay) + 'ms both';
-  svg.appendChild(ln);
-  return ln;
-}
-function somaPop(cx, cy, amp, delay, dur) {
-  // outer g positions, inner g scales: no transform-box needed, works everywhere
-  const outer = el('g', { transform: 'translate(' + px(cx) + ',' + px(cy) + ')' });
-  const inner = el('g', { class: 'soma' });
-  inner.style.setProperty('--amp', amp.toFixed(2));
-  inner.style.animation = 'somapop ' + (dur || SOMA_MS) + 'ms ease-out ' + Math.round(delay) + 'ms both';
-  const c = el('circle', { cx: 0, cy: 0, r: 9,
-    fill: 'none', stroke: 'var(--fire-deep)', 'stroke-width': 3 });
-  c.style.filter = 'drop-shadow(0 0 4px var(--fire))';
-  inner.appendChild(c);
-  outer.appendChild(inner);
-  svg.appendChild(outer);
-  return outer;
-}
-
-function propagate(cell, full, done) {
-  const overlays = [];
-  const finish = (wait) => setTimeout(() => {
-    for (const o of overlays) o.remove();
-    done();
-  }, wait);
-
-  const src = centerKey(cell.x, cell.y);
-  const adj = board.buildGraph();
-  // a dot card has no wires at all: a lone soma fires and that is that
-  if (!adj.has(src)) {
-    overlays.push(somaPop(cell.x + 0.5, cell.y + 0.5, 1, 0, 340));
-    finish(400);
-    return;
-  }
-
-  // breadth-first over the wire graph = hops away from the point of stimulus
-  const dist = new Map([[src, 0]]);
-  const queue = [src];
-  let maxD = 0;
-  for (let i = 0; i < queue.length; i++) {
-    const v = queue[i], d = dist.get(v);
-    for (const w of adj.get(v)) {
-      if (dist.has(w)) continue;
-      dist.set(w, d + 1); queue.push(w);
-      if (d + 1 > maxD) maxD = d + 1;
-    }
-  }
-
-  const decay  = full ? 1 : 0.6;              // sub-threshold signals fade
-  const maxHop = full ? 99 : 3;               // ...and do not travel far
-  // synaptic delay per hop, squeezed so a big network still fires quickly
-  const hop = full ? Math.min(60, 820 / Math.max(1, maxD)) : 42;
-  let last = 0;
-
-  for (const c of board.cells.values()) {
-    for (const e of cardEdges(c.type, c.orient, c.x, c.y)) {
-      const da = dist.get(e[0]), db = dist.get(e[1]);
-      if (da === undefined && db === undefined) continue;
-      let from = e[0], to = e[1], d = da;
-      if (db !== undefined && (da === undefined || db < da)) { from = e[1]; to = e[0]; d = db; }
-      const amp = Math.pow(decay, d);
-      if (d >= maxHop || amp < 0.14) continue;
-      overlays.push(spikeLine(nodePos(from), nodePos(to), d * hop, amp));
-      last = Math.max(last, d * hop + SPIKE_MS);
-    }
-  }
-  for (const c of board.cells.values()) {
-    const d = dist.get(centerKey(c.x, c.y));
-    if (d === undefined) continue;
-    const amp = Math.pow(decay, d);
-    if (d > maxHop || amp < 0.14) continue;
-    const dur = full ? SOMA_MS : 320;
-    overlays.push(somaPop(c.x + 0.5, c.y + 0.5, amp, d * hop, dur));
-    last = Math.max(last, d * hop + dur);
-  }
-  finish(last + 40);
-}
-
 /* ================= firing animation ================= */
 function fireCircuits(events, done) {
   if (events.length === 0) { done(); return; }
@@ -1017,17 +912,6 @@ function fireCircuits(events, done) {
         else { path.remove(); }
       }
       requestAnimationFrame(step);
-      // the neurons of the circuit fire as the wave sweeps past them;
-      // ones enclosed by it (dots) are recruited as the loop completes
-      const cum = [0];
-      for (const s of segs) cum.push(cum[cum.length - 1] + s.len);
-      const lit = [];
-      for (const cc of (ev.contributing || [])) {
-        const idx = ev.cycle.indexOf(centerKey(cc.x, cc.y));
-        const t = idx >= 0 ? dur * (cum[idx] / per) : dur * 0.9;
-        lit.push(somaPop(cc.x + 0.5, cc.y + 0.5, 1, t, 520));
-      }
-      setTimeout(() => { for (const l of lit) l.remove(); }, dur + 760);
       setTimeout(() => poly.remove(), 1200);
       let cx = 0, cy = 0;
       for (const n of ev.cycle) { const p = nodePos(n); cx += p.x; cy += p.y; }
@@ -1083,11 +967,9 @@ function onCellTap(cell) {
   selIdx = -1; selOrient = 0;
   renderAll();
   if (events.length) setStatusEvents(events);
-  propagate(cell, events.length > 0, () => {
-    fireCircuits(events, () => {
-      renderScores();
-      nextTurn(player === 'white' ? 'black' : 'white');
-    });
+  fireCircuits(events, () => {
+    renderScores();
+    nextTurn(player === 'white' ? 'black' : 'white');
   });
 }
 
@@ -1121,11 +1003,9 @@ function cpuMove() {
   renderAll();
   if (events.length) setStatusEvents(events);
   else setStatus('statusCpuPlaced');
-  propagate(mv.cell, events.length > 0, () => {
-    fireCircuits(events, () => {
-      renderScores();
-      nextTurn('white');
-    });
+  fireCircuits(events, () => {
+    renderScores();
+    nextTurn('white');
   });
 }
 
@@ -1137,35 +1017,14 @@ function finale(done) {
   let cx = 0, cy = 0;
   for (const c of cards) { cx += c.x + 0.5; cy += c.y + 0.5; }
   cx /= cards.length; cy /= cards.length;
-  const SPEED = 110; // ms per cell, for anything the wires do not reach
-  const HOP = 95;    // ms per wire segment
-  // the wave starts at the node nearest the middle and travels along the wires
-  const adj = board.buildGraph();
-  let seed = null, best = Infinity;
-  for (const n of adj.keys()) {
-    const p = nodePos(n);
-    const d = Math.hypot(p.x - cx, p.y - cy);
-    if (d < best) { best = d; seed = n; }
-  }
-  const hops = new Map();
-  if (seed !== null) {
-    hops.set(seed, 0);
-    const q = [seed];
-    for (let i = 0; i < q.length; i++)
-      for (const w of adj.get(q[i]))
-        if (!hops.has(w)) { hops.set(w, hops.get(q[i]) + 1); q.push(w); }
-  }
-  const delayAt = (node, fx, fy) =>
-    hops.has(node) ? hops.get(node) * HOP : Math.hypot(fx - cx, fy - cy) * SPEED;
-
+  const SPEED = 110; // ms per cell of distance
   let maxDelay = 0;
   const overlays = [];
   for (const c of cards) {
     for (const e of cardEdges(c.type, c.orient, c.x, c.y)) {
       const p = nodePos(e[0]), q = nodePos(e[1]);
       const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
-      const da = delayAt(e[0], p.x, p.y), db = delayAt(e[1], q.x, q.y);
-      const delay = Math.min(da, db);
+      const delay = Math.hypot(mx - cx, my - cy) * SPEED;
       if (delay > maxDelay) maxDelay = delay;
       const ln = el('line', { x1: px(p.x), y1: px(p.y), x2: px(q.x), y2: px(q.y), class: 'fire-edge' });
       ln.style.opacity = '0';
@@ -1173,7 +1032,7 @@ function finale(done) {
       svg.appendChild(ln); overlays.push(ln);
     }
     const dx = c.x + 0.5, dy = c.y + 0.5;
-    const delay = delayAt(centerKey(c.x, c.y), dx, dy);
+    const delay = Math.hypot(dx - cx, dy - cy) * SPEED;
     if (delay > maxDelay) maxDelay = delay;
     const glow = el('circle', { cx: px(dx), cy: px(dy), r: 11, fill: 'var(--fire)',
       stroke: 'var(--fire-deep)', 'stroke-width': 2 });
