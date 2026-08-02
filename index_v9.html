@@ -107,7 +107,6 @@ button.flat:active { transform: translateY(1px); }
   text-shadow: 0 1px 0 var(--paper), 0 0 8px var(--paper);
   animation: floatup 1.6s ease-out forwards;
 }
-@keyframes finaleflash { 0%{opacity:0} 30%{opacity:1} 100%{opacity:0} }
 @keyframes floatup { 0%{opacity:0; transform:translate(-50%,0) scale(.6)} 15%{opacity:1; transform:translate(-50%,-10px) scale(1.15)} 30%{transform:translate(-50%,-14px) scale(1)} 100%{opacity:0; transform:translate(-50%,-46px)} }
 
 #hand-area {
@@ -1009,51 +1008,13 @@ function cpuMove() {
   });
 }
 
-/* network-wide synchronized firing: a wave sweeps out from the board's
-   center of mass, lighting every wire and neuron in distance order */
-function finale(done) {
-  const cards = [...board.cells.values()];
-  if (cards.length === 0) { done(); return; }
-  let cx = 0, cy = 0;
-  for (const c of cards) { cx += c.x + 0.5; cy += c.y + 0.5; }
-  cx /= cards.length; cy /= cards.length;
-  const SPEED = 110; // ms per cell of distance
-  let maxDelay = 0;
-  const overlays = [];
-  for (const c of cards) {
-    for (const e of cardEdges(c.type, c.orient, c.x, c.y)) {
-      const p = nodePos(e[0]), q = nodePos(e[1]);
-      const mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
-      const delay = Math.hypot(mx - cx, my - cy) * SPEED;
-      if (delay > maxDelay) maxDelay = delay;
-      const ln = el('line', { x1: px(p.x), y1: px(p.y), x2: px(q.x), y2: px(q.y), class: 'fire-edge' });
-      ln.style.opacity = '0';
-      ln.style.animation = 'finaleflash .8s ease-out ' + delay + 'ms both';
-      svg.appendChild(ln); overlays.push(ln);
-    }
-    const dx = c.x + 0.5, dy = c.y + 0.5;
-    const delay = Math.hypot(dx - cx, dy - cy) * SPEED;
-    if (delay > maxDelay) maxDelay = delay;
-    const glow = el('circle', { cx: px(dx), cy: px(dy), r: 11, fill: 'var(--fire)',
-      stroke: 'var(--fire-deep)', 'stroke-width': 2 });
-    glow.style.opacity = '0';
-    glow.style.filter = 'drop-shadow(0 0 5px var(--fire))';
-    glow.style.animation = 'finaleflash .8s ease-out ' + delay + 'ms both';
-    svg.appendChild(glow); overlays.push(glow);
-  }
-  setTimeout(() => {
-    for (const o of overlays) o.remove();
-    done();
-  }, maxDelay + 950);
-}
-
 function endGame() {
   gameOver = true; busy = false;
   renderScores();
   lastResult = { w: scores.white, b: scores.black };
   renderResult();
+  setTimeout(() => document.getElementById('result-modal').classList.remove('hidden'), 700);
   setStatus('gameEnd', [scores.white, scores.black]);
-  finale(() => document.getElementById('result-modal').classList.remove('hidden'));
 }
 function renderResult() {
   if (!lastResult) return;
